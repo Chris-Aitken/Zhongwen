@@ -75,8 +75,8 @@ ui <- fluidPage(
   ),
   
   # vocabulary
-  #dataTableOutput("vocab_table")
-  h1(textOutput("correctness"))
+  # dataTableOutput("vocab_table")
+
 )
 
 # backend server logic
@@ -98,31 +98,44 @@ server <- function(input, output, session) {
   # assess if answer is correct
   check_answer_correct <- eventReactive(
                             input$submit_response, {
-                              gen_test_question()$response == input$vocab_test_input
+                              check_equal(
+                                gen_test_question()$response,
+                                input$vocab_test_input
+                              )
                             }
                           )
-  
-  # out text for testing
-  output$correctness <- renderText(check_answer_correct())
 
   # report whether user is correct or missed the mark
   observeEvent(
     input$submit_response, {
 
+      # don't show feedback if nothing has been entered
+      req(input$vocab_test_input)
+      
+      # remove any feedback currently displayed
+      hideFeedback("vocab_test_input")
+      
       # show praise if guess is okay
-      feedbackSuccess(
-        inputId = "vocab_test_input",
-        show = check_answer_correct(),
-        text = "Nice job!"
-      )
-
-      # show issue if problem
-      feedbackWarning(
+      if (isTRUE(check_answer_correct())) {
+        
+        showFeedback(
           inputId = "vocab_test_input",
-          show = isFALSE(check_answer_correct()),
-          text = gen_test_question()$response,
+          color = "#5cb85c",
+          icon = shiny::icon("ok", lib = "glyphicon"),
+          text = "Nice job!"
+        )
+        
+      } else if (isFALSE(check_answer_correct())) {
+        
+        # show issue if problem
+        showFeedback(
+          inputId = "vocab_test_input",
+          color = "#F89406",
+          text = sprintf("Answer: %s", gen_test_question()$response),
           icon = NULL
-      )
+        )
+        
+      }
 
     }
   )
