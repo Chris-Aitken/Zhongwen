@@ -22,26 +22,47 @@ get_random_entry <- function(df, col) {
 ui <- fluidPage(
   fluidRow(
     column(
-      4,
-      textOutput("vocab_test_prompt"),
-      actionButton("get_new_question", "Generate!"),
-      offset = 4
+      6,
+      offset = 3,
+      h1(textOutput("vocab_test_prompt")),
+      fluidRow(
+        column(
+          8,
+          textInput("vocab_test_input", label = NULL)
+        ),
+        column(
+          4,
+          actionButton("submit_response", "Submit")
+        )
+      ),
+      column(
+        4,
+        offset = 1,
+        actionButton("get_new_question", "Generate New Question")
+      )
     )
   ),
-  dataTableOutput("vocab_table")
+  #dataTableOutput("vocab_table")
 )
 
 # backend server logic
 server <- function(input, output, session) {
   
+  # clear test prompt box if new question generated
+  observeEvent(
+    input$get_new_question, {
+      updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
+    }
+  )
+  
   # generate new test question
-  test_question <- reactive({
-                     input$get_new_question
-                     get_random_entry(vocab, mandarin)
-                   })
+  gen_test_question <- reactive({
+                         input$get_new_question
+                         get_random_entry(vocab, mandarin)
+                       })
   
   # output test prompt
-  output$vocab_test_prompt <- renderText(test_question())
+  output$vocab_test_prompt <- renderText(gen_test_question())
   
   # full vocabulary
   output$vocab_table <- renderDataTable(
