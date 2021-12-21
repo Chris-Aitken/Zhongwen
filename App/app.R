@@ -2,6 +2,8 @@
 # load necessary packages
 library(shiny)
 library(shinyFeedback)
+library(shinyWidgets)
+library(bslib)
 library(readxl)
 library(dplyr)
 library(tidyr)
@@ -25,9 +27,9 @@ strip_notes <- function(text_in) {
 # function for getting a random entry from voab list
 get_random_entry <- function(df, prompt_col, response_col) {
   df %>%
+    drop_na({{ prompt_col }}, {{ response_col }}) %>%
     sample_n(size = 1) %>%
     select({{ prompt_col }}, {{ response_col }}) %>%
-    drop_na() %>%
     rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
     mutate(response = strip_notes(response))
 }
@@ -47,10 +49,61 @@ check_equal <- function(expected, val_to_check) {
 # user interface
 ui <- fluidPage(
   
+  # set theme
+  theme = bs_theme(version = 5),
+  
   # set up html etc for feedback mechanism
   useShinyFeedback(),
   
-  # layout of basic quiz
+  # options for basic quiz
+  fluidRow(
+    column(
+      4,
+      radioGroupButtons(
+        "sampling_type",
+        "After question",
+        selected = "with_replacement",
+        individual = TRUE,
+        justified = TRUE,
+        choices = c(
+          "Put word back" = "with_replacement",
+          "Remove from deck" = "without_replacement"
+        )
+      )
+    ),
+    column(
+      4,
+      radioGroupButtons(
+        "prompt_type",
+        "Prompt",
+        selected = "mandarin",
+        individual = TRUE,
+        justified = TRUE,
+        choices = c(
+          "Pīnyīn" = "pinyin",
+          "中文" = "mandarin",
+          "English" = "english"
+        )
+      )
+    ),
+    column(
+      4,
+      radioGroupButtons(
+        "response_type",
+        "Response",
+        selected = "english",
+        individual = TRUE,
+        justified = TRUE,
+        choices = c(
+          "Pīnyīn" = "pinyin",
+          "中文" = "mandarin",
+          "English" = "english"
+        )
+      )
+    )
+  ),
+  
+  # layout of quiz itself
   fluidRow(
     column(
       6,
@@ -67,7 +120,7 @@ ui <- fluidPage(
         )
       ),
       column(
-        4,
+        6,
         offset = 1,
         actionButton("get_new_question", "Generate New Question")
       ),
@@ -87,8 +140,8 @@ server <- function(input, output, session) {
                          input$get_new_question
                          vocab %>% 
                            get_random_entry(
-                             prompt_col = "mandarin",
-                             response_col = "english"
+                             prompt_col = input$prompt_type,
+                             response_col = input$response_type
                            )
                        })
   
@@ -115,9 +168,10 @@ server <- function(input, output, session) {
       # remove any feedback currently displayed
       hideFeedback("vocab_test_input")
       
-      # show praise if guess is okay
+      # code for handling feedback
       if (isTRUE(check_answer_correct())) {
         
+        # show priase if answer is okay (approx)
         showFeedback(
           inputId = "vocab_test_input",
           color = "#5cb85c",
@@ -127,7 +181,7 @@ server <- function(input, output, session) {
         
       } else if (isFALSE(check_answer_correct())) {
         
-        # show issue if problem
+        # show answer otherwise
         showFeedback(
           inputId = "vocab_test_input",
           color = "#F89406",
@@ -140,7 +194,7 @@ server <- function(input, output, session) {
     }
   )
   
-  # clear test prompt box if new question generated
+  # clear test prompt box + feedback if new question generated
   observeEvent(
     input$get_new_question, {
       updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
