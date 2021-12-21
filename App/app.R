@@ -16,6 +16,9 @@ path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
 # load vocabulary with translations
 vocab <- read_excel(glue("{path_to_project}/Data/vocabulary.xlsx"))
 
+# chapters of book vocabulary is from
+lesson_nums <- unique(vocab$lesson)
+
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
   text_in %>%
@@ -34,11 +37,6 @@ get_random_entry <- function(df, prompt_col, response_col) {
     mutate(response = strip_notes(response))
 }
 
-# work out if all elements of a list match
-all_same <- function(list_in) {
-  length(unique(list_in)) == 1
-}
-
 # function for checking strings of text match (approximately)
 check_equal <- function(expected, val_to_check) {
   expected <- strsplit(expected, split = ",") %>% unlist()
@@ -50,29 +48,59 @@ check_equal <- function(expected, val_to_check) {
 ui <- fluidPage(
   
   # set theme
-  theme = bs_theme(version = 5),
+  theme = bs_theme(version = 3),
   
   # set up html etc for feedback mechanism
   useShinyFeedback(),
   
+  # add some vertical space
+  br(),
+  
   # options for basic quiz
   fluidRow(
+    
+    # hidden options in dropdown
     column(
-      4,
-      radioGroupButtons(
-        "sampling_type",
-        "After question",
-        selected = "with_replacement",
-        individual = TRUE,
-        justified = TRUE,
-        choices = c(
-          "Put word back" = "with_replacement",
-          "Remove from deck" = "without_replacement"
-        )
+      1,
+      br(),
+      dropdownButton(
+        
+        # title inside dropdown
+        h3("Settings"),
+        
+        # first option - sample with replacement?
+        radioGroupButtons(
+          "sampling_type",
+          "Sampling",
+          selected = "with_replacement",
+          individual = TRUE,
+          justified = TRUE,
+          choices = c(
+            "Put word back" = "with_replacement",
+            "Remove from deck" = "without_replacement"
+          )
+        ),
+        
+        # second option - restrict vocabulary to specific lesson?
+        multiInput(
+          "lessons",
+          "Lessons to include",
+          choices = c(list(lesson_nums), as.list(lesson_nums)) %>%
+                    setNames(c("All", glue("Lesson: {lesson_nums}")))
+        ),
+        
+        # options for styling of dropdown
+        tooltip = tooltipOptions(title = "Additional options"),
+        icon = icon("gear"),
+        width = "300px"
+        
       )
     ),
+    
+    # which language should prompt be presented in?
     column(
       4,
+      offset = 1,
       radioGroupButtons(
         "prompt_type",
         "Prompt",
@@ -86,6 +114,8 @@ ui <- fluidPage(
         )
       )
     ),
+    
+    # which language should we expect the response to be in?
     column(
       4,
       radioGroupButtons(
@@ -101,6 +131,8 @@ ui <- fluidPage(
         )
       )
     )
+    
+  # close off options
   ),
   
   # layout of quiz itself
