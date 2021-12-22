@@ -1,7 +1,7 @@
 
 # load necessary packages
 library(shiny)
-library(shinyFeedback)
+library(shinyalert)
 library(shinyWidgets)
 library(bslib)
 library(readxl)
@@ -54,7 +54,6 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
   # get entry for current question
   df <- df %>%
         rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
-        select(prompt, response) %>%
         drop_na(prompt, response) %>%
         sample_n(size = 1) %>%
         mutate(response = strip_notes(response))
@@ -99,7 +98,7 @@ ui <- fluidPage(
         # first option - sample with replacement?
         radioGroupButtons(
           "sampling_type",
-          div(icon("random"), "Sampling"),
+          div(icon("random"), "After question"),
           selected = "with_replacement",
           individual = TRUE,
           justified = TRUE,
@@ -255,28 +254,60 @@ server <- function(input, output, session) {
       # don't show feedback if nothing has been entered
       req(input$vocab_test_input)
       
-      # remove any feedback currently displayed
-      hideFeedback("vocab_test_input")
+      # get full data row
+      full_question_entry <<- gen_test_question() %>%
+                              rename(
+                                !!input$prompt_type := prompt,
+                                !!input$response_type := response
+                              )
       
       # code for handling feedback
       if (isTRUE(check_answer_correct())) {
         
         # show priase if answer is okay (approx)
-        showFeedback(
-          inputId = "vocab_test_input",
-          color = "#5cb85c",
-          icon = shiny::icon("ok", lib = "glyphicon"),
-          text = "Nice job!"
+        shinyalert(
+          title = "Correct!",
+          size = "xs", 
+          closeOnEsc = TRUE,
+          closeOnClickOutside = TRUE,
+          html = FALSE,
+          type = "success",
+          showConfirmButton = TRUE,
+          confirmButtonText = "Close",
+          showCancelButton = FALSE,
+          timer = 10000,
+          imageUrl = "",
+          animation = TRUE,
+          text = sprintf(
+                   "'%s' (%s) translates to '%s'",
+                   full_question_entry$mandarin,
+                   full_question_entry$pinyin,
+                   full_question_entry$english
+                 )
         )
         
       } else if (isFALSE(check_answer_correct())) {
         
         # show answer otherwise
-        showFeedback(
-          inputId = "vocab_test_input",
-          color = "#F89406",
-          text = sprintf("Answer: %s", gen_test_question()$response),
-          icon = NULL
+        shinyalert(
+          title = "Not quite!",
+          size = "xs", 
+          closeOnEsc = TRUE,
+          closeOnClickOutside = TRUE,
+          html = FALSE,
+          type = "warning",
+          showConfirmButton = TRUE,
+          confirmButtonText = "Close",
+          showCancelButton = FALSE,
+          timer = 10000,
+          imageUrl = "",
+          animation = TRUE,
+          text = sprintf(
+            "'%s' (%s) translates to '%s'",
+            full_question_entry$mandarin,
+            full_question_entry$pinyin,
+            full_question_entry$english
+          )
         )
         
       }
@@ -293,7 +324,6 @@ server <- function(input, output, session) {
       input$lessons_to_include
     }, {
       updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
-      hideFeedback("vocab_test_input")
     }
   )
   
