@@ -28,13 +28,23 @@ strip_notes <- function(text_in) {
 }
 
 # function for getting a random entry from voab list
-get_random_entry <- function(df, prompt_col, response_col) {
+get_random_entry <- function(df, prompt_col, response_col, lesson_selection) {
+  
+  # check we have at least some lessons selected, set to all if not
+  lesson_selection <- ifelse(is.null(lesson_selection), "all", lesson_selection)
+  
+  # then replace "all" flag with all lesson nums
+  lesson_selection <- ifelse(lesson_selection == "all", lesson_nums, lesson_selection)
+  
+  # get entry, respecting lesson selection
   df %>%
-    drop_na({{ prompt_col }}, {{ response_col }}) %>%
-    sample_n(size = 1) %>%
-    select({{ prompt_col }}, {{ response_col }}) %>%
     rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
+    filter(lesson %in% {{ lesson_selection }}) %>%
+    select(prompt, response) %>%
+    drop_na(prompt, response) %>%
+    sample_n(size = 1) %>%
     mutate(response = strip_notes(response))
+  
 }
 
 # function for checking strings of text match (approximately)
@@ -65,13 +75,17 @@ ui <- fluidPage(
       br(),
       dropdownButton(
         
+        # set id for dropdown
+        inputId = "settings_dropdown",
+        
         # title inside dropdown
-        h3("Settings"),
+        h2("Settings"),
+        br(),
         
         # first option - sample with replacement?
         radioGroupButtons(
           "sampling_type",
-          "Sampling",
+          div(icon("random"), "Sampling"),
           selected = "with_replacement",
           individual = TRUE,
           justified = TRUE,
@@ -83,15 +97,16 @@ ui <- fluidPage(
         
         # second option - restrict vocabulary to specific lesson?
         multiInput(
-          "lessons",
-          "Lessons to include",
-          choices = c(list(lesson_nums), as.list(lesson_nums)) %>%
-                    setNames(c("All", glue("Lesson: {lesson_nums}")))
+          "lessons_to_include",
+          div(icon("filter"), "Lessons to include"),
+          selected = "all",
+          choiceNames = c("All", glue("Lesson: {lesson_nums}")),
+          choiceValues = c("all", list(lesson_nums))
         ),
         
         # options for styling of dropdown
         tooltip = tooltipOptions(title = "Additional options"),
-        icon = icon("gear"),
+        icon = icon("cog"),
         width = "300px"
         
       )
@@ -108,8 +123,8 @@ ui <- fluidPage(
         individual = TRUE,
         justified = TRUE,
         choices = c(
-          "Pīnyīn" = "pinyin",
           "中文" = "mandarin",
+          "Pīnyīn" = "pinyin",
           "English" = "english"
         )
       )
@@ -125,8 +140,8 @@ ui <- fluidPage(
         individual = TRUE,
         justified = TRUE,
         choices = c(
-          "Pīnyīn" = "pinyin",
           "中文" = "mandarin",
+          "Pīnyīn" = "pinyin",
           "English" = "english"
         )
       )
@@ -148,7 +163,7 @@ ui <- fluidPage(
         ),
         column(
           4,
-          actionButton("submit_response", "Submit")
+          actionButton("submit_response", label = "Submit", icon = icon("arrow-circle-right"))
         )
       ),
       column(
@@ -167,13 +182,23 @@ ui <- fluidPage(
 # backend server logic
 server <- function(input, output, session) {
   
+  # check that at least one lesson type selected by user; choose all if not
+  observeEvent(
+    input$settings_dropdown, {
+      if (is.null(input$lessons_to_include)) {
+        updateMultiInput(session = session, inputId = "lessons_to_include", selected = "all")
+      }
+    }
+  )
+  
   # generate new test question
   gen_test_question <- reactive({
                          input$get_new_question
                          vocab %>% 
                            get_random_entry(
                              prompt_col = input$prompt_type,
-                             response_col = input$response_type
+                             response_col = input$response_type,
+                             lesson_selection = input$lessons_to_include
                            )
                        })
   
@@ -226,9 +251,14 @@ server <- function(input, output, session) {
     }
   )
   
-  # clear test prompt box + feedback if new question generated
-  observeEvent(
-    input$get_new_question, {
+  # clear test prompt box + feedback if new question generated or other settings change
+  observeEvent({
+      input$get_new_question
+      input$prompt_type
+      input$response_type
+      input$sampling_type
+      input$lessons_to_include
+    }, {
       updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
       hideFeedback("vocab_test_input")
     }
