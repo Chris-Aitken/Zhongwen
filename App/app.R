@@ -19,6 +19,9 @@ vocab <- read_excel(glue("{path_to_project}/Data/vocabulary.xlsx"))
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
 
+# initialise empty df to add previously-served questions to
+previous_question_entries <- vocab %>% slice(0)
+
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
   text_in %>%
@@ -28,22 +31,33 @@ strip_notes <- function(text_in) {
 }
 
 # function for getting a random entry from voab list
-get_random_entry <- function(df, prompt_col, response_col, lesson_selection) {
+get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sampling_type, exclude_df) {
   
   # check we have at least some lessons selected, set to all if not
-  lesson_selection <- ifelse(is.null(lesson_selection), "all", lesson_selection)
-  
   # then replace "all" flag with all lesson nums
-  lesson_selection <- ifelse(lesson_selection == "all", lesson_nums, lesson_selection)
+  lesson_selection <- ifelse(is.null(lesson_selection), "all", lesson_selection) %>%
+                      {ifelse(. == "all", lesson_nums, lesson_selection)}
   
-  # get entry, respecting lesson selection
-  df %>%
-    rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
-    filter(lesson %in% {{ lesson_selection }}) %>%
-    select(prompt, response) %>%
-    drop_na(prompt, response) %>%
-    sample_n(size = 1) %>%
-    mutate(response = strip_notes(response))
+  # change sampling type flag to logical for below
+  no_replacement <- ifelse(sampling_type == "without_replacement", TRUE, FALSE)
+  
+  # focus only on lessons user cares about
+  df <- df %>%
+        filter(lesson %in% {{ lesson_selection }})
+  
+  # if user has requested that entries from previous questions be removed, remove them
+  if (no_replacement) {
+    df <- df %>%
+          anti_join(previous_question_entries, by = {{ prompt_col }})
+  }
+  
+  # get entry for current question
+  df <- df %>%
+        rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
+        select(prompt, response) %>%
+        drop_na(prompt, response) %>%
+        sample_n(size = 1) %>%
+        mutate(response = strip_notes(response))
   
 }
 
@@ -51,7 +65,7 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection) {
 check_equal <- function(expected, val_to_check) {
   expected <- strsplit(expected, split = ",") %>% unlist()
   all_inputs <- list(expected = expected, val_to_check = val_to_check)
-  any(grepl(val_to_check, expected, ignore.case = TRUE))
+  any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
 }
 
 # user interface
@@ -191,19 +205,38 @@ server <- function(input, output, session) {
     }
   )
   
-  # generate new test question
+  # generate new test question (not eventReactive, because we want dependency on options, too)
   gen_test_question <- reactive({
                          input$get_new_question
                          vocab %>% 
                            get_random_entry(
                              prompt_col = input$prompt_type,
                              response_col = input$response_type,
-                             lesson_selection = input$lessons_to_include
+                             lesson_selection = input$lessons_to_include,
+                             sampling_type = input$sampling_type,
+                             exclude_df = previous_question_entries
                            )
                        })
   
   # output test prompt
   output$vocab_test_prompt <- renderText(gen_test_question()$prompt)
+  
+  # create tracker at start; if options set to remove words already presented & answered, track them
+  observeEvent(
+    input$submit_response, {
+      if (input$sampling_type == "without_replacement") {
+        previous_question_entries <<- bind_rows(
+                                        previous_question_entries,
+                                        gen_test_question() %>%
+                                          rename(
+                                            !!input$prompt_type := prompt,
+                                            !!input$response_type := response
+                                          )
+                                      ) %>%
+                                      distinct_all()
+      }
+    }
+  )
   
   # assess if answer is correct
   check_answer_correct <- eventReactive(
