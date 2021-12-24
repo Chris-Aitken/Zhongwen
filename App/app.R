@@ -3,6 +3,7 @@
 library(shiny)
 library(shinyalert)
 library(shinyWidgets)
+library(shinyjs)
 library(bslib)
 library(readxl)
 library(dplyr)
@@ -30,7 +31,7 @@ strip_notes <- function(text_in) {
     trimws()
 }
 
-# function for getting a random entry from voab list
+# function for getting a random entry from vocab list
 get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sampling_type, exclude_df) {
   
   # check we have at least some lessons selected, set to all if not
@@ -42,28 +43,37 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
   no_replacement <- ifelse(sampling_type == "without_replacement", TRUE, FALSE)
   
   # focus only on lessons user cares about
-  df <- df %>%
-        filter(lesson %in% {{ lesson_selection }})
+  df_ed <- df %>%
+           filter(lesson %in% {{ lesson_selection }})
   
   # if user has requested that entries from previous questions be removed, remove them
   if (no_replacement) {
-    df <- df %>%
-          anti_join(previous_question_entries, by = {{ prompt_col }})
+    df_ed <- df_ed %>%
+             anti_join(previous_question_entries, by = {{ prompt_col }})
   }
   
-  # get entry for current question
-  df <- df %>%
-        rename(prompt = {{ prompt_col }}, response = {{ response_col }}) %>%
-        drop_na(prompt, response) %>%
-        sample_n(size = 1) %>%
-        mutate(response = strip_notes(response))
+  # if we've exhuasted all vocab from selected set and aren't using replacement, report all done
+  if (nrow(df_ed) == 0) {
+    
+    # return report
+    tibble(prompt = "All done!", correct_response = NULL)
+    
+  } else {
+    
+    # otherwise, get entry for current question
+    df_ed %>%
+      rename(prompt = {{ prompt_col }}, correct_response = {{ response_col }}) %>%
+      drop_na(prompt, correct_response) %>%
+      sample_n(size = 1) %>%
+      mutate(correct_response = strip_notes(correct_response))
+    
+  }
   
 }
 
 # function for checking strings of text match (approximately)
 check_equal <- function(expected, val_to_check) {
   expected <- strsplit(expected, split = ",") %>% unlist()
-  all_inputs <- list(expected = expected, val_to_check = val_to_check)
   any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
 }
 
@@ -73,8 +83,8 @@ ui <- fluidPage(
   # set theme
   theme = bs_theme(version = 3),
   
-  # set up html etc for feedback mechanism
-  useShinyFeedback(),
+  # set up necessary additional details
+  useShinyjs(),
   
   # add some vertical space
   br(),
@@ -220,28 +230,54 @@ server <- function(input, output, session) {
   # output test prompt
   output$vocab_test_prompt <- renderText(gen_test_question()$prompt)
   
-  # create tracker at start; if options set to remove words already presented & answered, track them
+  # if options set to remove words already presented & answered, track them
   observeEvent(
     input$submit_response, {
+      
+      # only do following if user has explicitly requested it
       if (input$sampling_type == "without_replacement") {
-        previous_question_entries <<- bind_rows(
-                                        previous_question_entries,
-                                        gen_test_question() %>%
-                                          rename(
-                                            !!input$prompt_type := prompt,
-                                            !!input$response_type := response
-                                          )
-                                      ) %>%
-                                      distinct_all()
+        
+        # if done with all available questions
+        if (gen_test_question()$prompt == "All done!") {
+          
+          # start tracker again
+          previous_question_entries <<- previous_question_entries %>% 
+                                        slice(0)
+          
+        # continue tracking if not 
+        } else {
+          
+          # add current question to list of previous questions
+          previous_question_entries <<- bind_rows(
+                                          previous_question_entries,
+                                          gen_test_question() %>%
+                                            rename(
+                                              !!input$prompt_type := prompt,
+                                              !!input$response_type := correct_response
+                                            )
+                                        ) %>%
+                                        distinct_all()
+          
+        }
       }
     }
   )
+  
+  # stop user from submitting response if prompt lets user know bank is exhausted
+  # (if sampling without replacement)
+  observe({
+    if (gen_test_question()$prompt == "All done!") {
+      disable("vocab_test_input")
+    } else {
+      enable("vocab_test_input")
+    }
+  })
   
   # assess if answer is correct
   check_answer_correct <- eventReactive(
                             input$submit_response, {
                               check_equal(
-                                gen_test_question()$response,
+                                gen_test_question()$correct_response,
                                 input$vocab_test_input
                               )
                             }
@@ -258,7 +294,7 @@ server <- function(input, output, session) {
       full_question_entry <<- gen_test_question() %>%
                               rename(
                                 !!input$prompt_type := prompt,
-                                !!input$response_type := response
+                                !!input$response_type := correct_response
                               )
       
       # code for handling feedback
@@ -276,7 +312,6 @@ server <- function(input, output, session) {
           confirmButtonText = "Close",
           showCancelButton = FALSE,
           timer = 10000,
-          imageUrl = "",
           animation = TRUE,
           text = sprintf(
                    "'%s' (%s) translates to '%s'",
