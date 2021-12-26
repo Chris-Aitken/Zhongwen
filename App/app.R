@@ -58,18 +58,21 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
              anti_join(previous_question_entries, by = {{ prompt_col }})
   }
   
+  # remove entries for which one of prompt or response missing + rename
+  df_ed <- df_ed %>%
+           rename(prompt = {{ prompt_col }}, correct_response = {{ response_col }}) %>%
+           drop_na(prompt, correct_response)
+  
   # if we've exhuasted all vocab from selected set and aren't using replacement, report all done
   if (nrow(df_ed) == 0) {
     
     # return report
-    tibble(prompt = "All done!", correct_response = NULL)
+    tibble(prompt = "All done!", correct_response = "")
     
   } else {
     
     # otherwise, get entry for current question
     df_ed %>%
-      rename(prompt = {{ prompt_col }}, correct_response = {{ response_col }}) %>%
-      drop_na(prompt, correct_response) %>%
       sample_n(size = 1) %>%
       mutate(correct_response = strip_notes(correct_response))
     
