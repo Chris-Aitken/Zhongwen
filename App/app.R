@@ -15,13 +15,19 @@ library(glue)
 path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
 
 # load vocabulary with translations
-vocab <- read_excel(glue("{path_to_project}/Data/vocabulary.xlsx"))
+vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
+         read_excel()
 
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
 
 # initialise empty df to add previously-served questions to
 previous_question_entries <- vocab %>% slice(0)
+
+# different choices for languages to test
+language_choices <- c("中文" = "mandarin",
+                      "Pīnyīn" = "pinyin",
+                      "English" = "english")
 
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
@@ -75,6 +81,32 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
 check_equal <- function(expected, val_to_check) {
   expected <- strsplit(expected, split = ",") %>% unlist()
   any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
+}
+
+# function for turning off/on individual radio button inputs
+disable_radio_options <- function(radio_input_id, options, disable_if_equal_to) {
+  
+  # start option counter
+  option_num <- 0
+  
+  # cycle through radio button options
+  for (option in options) {
+  
+    # selector for option we want to change
+    toggling_selector <- glue("#{radio_input_id} button:eq({option_num})")
+    
+    # toggle availability of option
+    if (option == disable_if_equal_to) {
+      disable(selector = toggling_selector)
+    } else {
+      enable(selector = toggling_selector)
+    }
+    
+    # update counter
+    option_num <- option_num + 1
+    
+  }
+  
 }
 
 # user interface
@@ -145,11 +177,7 @@ ui <- fluidPage(
         selected = "mandarin",
         individual = TRUE,
         justified = TRUE,
-        choices = c(
-          "中文" = "mandarin",
-          "Pīnyīn" = "pinyin",
-          "English" = "english"
-        )
+        choices = language_choices
       )
     ),
     
@@ -162,11 +190,7 @@ ui <- fluidPage(
         selected = "english",
         individual = TRUE,
         justified = TRUE,
-        choices = c(
-          "中文" = "mandarin",
-          "Pīnyīn" = "pinyin",
-          "English" = "english"
-        )
+        choices = language_choices
       )
     )
     
@@ -211,6 +235,28 @@ server <- function(input, output, session) {
       if (is.null(input$lessons_to_include)) {
         updateMultiInput(session = session, inputId = "lessons_to_include", selected = "all")
       }
+    }
+  )
+  
+  # ensure that user can't select response language as prompt language
+  observeEvent(
+    input$prompt_type, {
+      disable_radio_options(
+        radio_input_id = "response_type",
+        options = language_choices,
+        disable_if_equal_to = input$prompt_type
+      )
+    }
+  )
+  
+  # now the reverse: ensure user can't select prompt language as response language
+  observeEvent(
+    input$prompt_type, {
+      disable_radio_options(
+        radio_input_id = "prompt_type",
+        options = language_choices,
+        disable_if_equal_to = input$response_type
+      )
     }
   )
   
