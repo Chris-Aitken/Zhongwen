@@ -251,7 +251,7 @@ server <- function(input, output, session) {
   
   # now the reverse: ensure user can't select prompt language as response language
   observeEvent(
-    input$prompt_type, {
+    input$response_type, {
       disable_radio_options(
         radio_input_id = "prompt_type",
         options = language_choices,
