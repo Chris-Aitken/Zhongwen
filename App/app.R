@@ -359,6 +359,7 @@ server <- function(input, output, session) {
           showCancelButton = FALSE,
           timer = 10000,
           animation = TRUE,
+          inputId = "alert_correct_answer",
           text = sprintf(
                    "'%s' (%s) translates to '%s'",
                    full_question_entry$mandarin,
@@ -383,6 +384,7 @@ server <- function(input, output, session) {
           timer = 10000,
           imageUrl = "",
           animation = TRUE,
+          inputId = "alert_incorrect_answer",
           text = sprintf(
             "'%s' (%s) translates to '%s'",
             full_question_entry$mandarin,
@@ -393,6 +395,14 @@ server <- function(input, output, session) {
         
       }
 
+    }
+  )
+  
+  # after feddback is displayed, move onto next question
+  observeEvent({
+      input$alert_correct_answer | input$alert_incorrect_answer
+    }, {
+      click("get_new_question")
     }
   )
   
