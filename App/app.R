@@ -116,116 +116,158 @@ disable_radio_options <- function(radio_input_id, options, disable_if_equal_to) 
 ui <- fluidPage(
   
   # set theme
-  theme = bs_theme(version = 3),
+  theme = bs_theme(version = 4, bootswatch = "journal"),
+  
+  # some quick inline css
+  tags$head(
+    tags$style(
+      HTML("
+         .dropdown-toggle::after {
+           display: none;
+         }
+         
+         .form-group {
+           text-align: center;
+         }
+         
+         #vocab_test_prompt {
+           font-size: 2.5em !important;
+           text-align: center;
+         }
+         
+         h2 {
+           text-align: center;
+         }
+      ")
+    )
+  ),
   
   # set up necessary additional details
   useShinyjs(),
   
-  # add some vertical space
-  br(),
-  
-  # options for basic quiz
-  fluidRow(
+  # create multi-page structure
+  tabsetPanel(
+    type = "pills",
     
-    # hidden options in dropdown
-    column(
-      1,
+    # test page
+    tabPanel(
+      "Test Vocabulary Recall",
+  
+      # add some vertical space
       br(),
-      dropdownButton(
+      
+      # options for basic quiz
+      fluidRow(
         
-        # set id for dropdown
-        inputId = "settings_dropdown",
-        
-        # title inside dropdown
-        h2("Settings"),
-        br(),
-        
-        # first option - sample with replacement?
-        radioGroupButtons(
-          "sampling_type",
-          div(icon("random"), "After question"),
-          selected = "with_replacement",
-          individual = TRUE,
-          justified = TRUE,
-          choices = c(
-            "Put word back" = "with_replacement",
-            "Remove from deck" = "without_replacement"
+        # hidden options in dropdown
+        column(
+          1,
+          br(),
+          dropdownButton(
+            
+            # set id for dropdown, settings etc
+            inputId = "settings_dropdown",
+            
+            # title inside dropdown
+            h2("Settings"),
+            br(),
+            
+            # first option - sample with replacement?
+            radioGroupButtons(
+              "sampling_type",
+              div(icon("random"), "After question"),
+              selected = "with_replacement",
+              individual = TRUE,
+              justified = TRUE,
+              choices = c(
+                "Put word back" = "with_replacement",
+                "Remove word" = "without_replacement"
+              )
+            ),
+            
+            # second option - restrict vocabulary to specific lesson?
+            multiInput(
+              "lessons_to_include",
+              div(icon("filter"), "Lessons to include"),
+              selected = "all",
+              choiceNames = c("All", glue("Lesson: {lesson_nums}")),
+              choiceValues = c("all", list(lesson_nums))
+            ),
+            
+            # options for styling of dropdown
+            tooltip = tooltipOptions(title = "Additional options"),
+            icon = icon("cog"),
+            width = "300px"
+            
           )
         ),
         
-        # second option - restrict vocabulary to specific lesson?
-        multiInput(
-          "lessons_to_include",
-          div(icon("filter"), "Lessons to include"),
-          selected = "all",
-          choiceNames = c("All", glue("Lesson: {lesson_nums}")),
-          choiceValues = c("all", list(lesson_nums))
-        ),
-        
-        # options for styling of dropdown
-        tooltip = tooltipOptions(title = "Additional options"),
-        icon = icon("cog"),
-        width = "300px"
-        
-      )
-    ),
-    
-    # which language should prompt be presented in?
-    column(
-      4,
-      offset = 1,
-      radioGroupButtons(
-        "prompt_type",
-        "Prompt",
-        selected = "mandarin",
-        individual = TRUE,
-        justified = TRUE,
-        choices = language_choices
-      )
-    ),
-    
-    # which language should we expect the response to be in?
-    column(
-      4,
-      radioGroupButtons(
-        "response_type",
-        "Response",
-        selected = "english",
-        individual = TRUE,
-        justified = TRUE,
-        choices = language_choices
-      )
-    )
-    
-  # close off options
-  ),
-  
-  # layout of quiz itself
-  fluidRow(
-    column(
-      6,
-      offset = 3,
-      h1(textOutput("vocab_test_prompt")),
-      fluidRow(
-        column(
-          8,
-          textInput("vocab_test_input", label = NULL)
-        ),
+        # which language should prompt be presented in?
         column(
           4,
-          actionButton("submit_response", label = "Submit", icon = icon("arrow-circle-right"))
+          offset = 1,
+          radioGroupButtons(
+            "prompt_type",
+            "Prompt",
+            selected = "mandarin",
+            individual = TRUE,
+            justified = TRUE,
+            choices = language_choices
+          )
+        ),
+        
+        # which language should we expect the response to be in?
+        column(
+          4,
+          radioGroupButtons(
+            "response_type",
+            "Response",
+            selected = "english",
+            individual = TRUE,
+            justified = TRUE,
+            choices = language_choices
+          )
         )
+        
+      # close off options
       ),
-      column(
-        6,
-        offset = 1,
-        actionButton("get_new_question", "Generate New Question")
-      ),
+      
+      # layout of quiz itself
+      fluidRow(
+        column(
+          6,
+          offset = 3,
+          h1(textOutput("vocab_test_prompt")),
+          br(),
+          br(),
+            fluidRow(
+              column(
+                12,
+                div(style="display:inline-block;vertical-align:top;", textInput("vocab_test_input", label = NULL)),
+                div(style="display:inline-block;vertical-align:top;", actionButton("submit_response", label = "Submit")),
+                align = "center"
+              )
+            ),
+          column(
+            12,
+            actionButton("get_new_question", "Generate New Question"),
+            align = "center"
+          ),
+        )
+      )
+      
+    ),
+    
+    # new page for full vocabulary
+    tabPanel(
+      "Full Vocabulary",
+      
+      # vocabulary in a table
+      dataTableOutput("vocab_table")
+    
     )
-  ),
   
-  # vocabulary
-  # dataTableOutput("vocab_table")
+  )
 
 )
 
