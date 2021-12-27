@@ -138,6 +138,10 @@ ui <- fluidPage(
          h2 {
            text-align: center;
          }
+         
+         .sweet-alert p {
+           font-size: 20px;
+         }
       ")
     )
   ),
@@ -146,8 +150,9 @@ ui <- fluidPage(
   useShinyjs(),
   
   # create multi-page structure
-  tabsetPanel(
-    type = "pills",
+  navbarPage(
+    "当代中文 – Online Revision",
+    #type = "pills",
     
     # test page
     tabPanel(
