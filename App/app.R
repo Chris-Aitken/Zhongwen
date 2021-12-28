@@ -29,6 +29,9 @@ language_choices <- c("中文" = "mandarin",
                       "Pīnyīn" = "pinyin",
                       "English" = "english")
 
+# initialise score counters
+current_score <- 0
+
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
   text_in %>%
@@ -179,7 +182,7 @@ ui <- fluidPage(
       "Test Vocabulary Recall",
   
       # add some vertical space
-      br(),
+      tags$hr(style = "height:5px; visibility:hidden;"),
       
       # options for basic quiz
       fluidRow(
@@ -280,7 +283,22 @@ ui <- fluidPage(
             align = "center"
           ),
         )
-      )
+      ),
+      
+      # score for quiz
+      tags$hr(style = "height:60px; visibility:hidden;"),
+      fluidRow(
+        column(
+          12,
+          #hidden(
+            div(
+              id = "vocab_test_score_box",
+              textOutput("test")
+            ),
+          #),
+          align = "center"
+        )
+      ),
     
     # close off test page
     ),
@@ -292,6 +310,12 @@ ui <- fluidPage(
       # vocabulary in a table
       dataTableOutput("vocab_table")
     
+    ),
+    
+    # new page for key phrases
+    tabPanel(
+      "Key Phrases",
+      
     )
   
   )
@@ -403,6 +427,24 @@ server <- function(input, output, session) {
                               )
                             }
                           )
+  
+  # update score counter
+  observeEvent(
+    input$submit_response, {
+      if (isTRUE(check_answer_correct())) {
+        current_score <<- current_score + 1
+      }
+    }
+  )
+  
+  # generate score statement
+  gen_score_statement <- reactive({
+                           input$submit_response
+                           paste0("Score: ", current_score, "/", input$submit_response)
+                         })
+  
+  # test
+  output$test <- renderText(gen_score_statement())
 
   # report whether user is correct or missed the mark
   observeEvent(
