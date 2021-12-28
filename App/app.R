@@ -122,6 +122,20 @@ ui <- fluidPage(
   tags$head(
     tags$style(
       HTML("
+         .navbar {
+           padding: 0.5rem 0rem;
+           border-bottom: 1px solid #dee2e6 !important;
+         }
+         
+         .navbar.navbar-default{
+           border: none
+         }
+         
+         .navbar-nav > li{
+           padding-left:10px;
+           padding-right:10px;
+         }
+      
          .dropdown-toggle::after {
            display: none;
          }
@@ -151,8 +165,14 @@ ui <- fluidPage(
   
   # create multi-page structure
   navbarPage(
-    "当代中文 – Online Revision",
-    #type = "pills",
+    "当代中文 – Revision Tool",
+    collapsible = TRUE,
+    id = "page_nav_menu",
+    
+    # home page
+    tabPanel(
+      "Home",
+    ),
     
     # test page
     tabPanel(
@@ -168,42 +188,42 @@ ui <- fluidPage(
         column(
           1,
           br(),
-          dropdownButton(
-            
-            # set id for dropdown, settings etc
-            inputId = "settings_dropdown",
-            
-            # title inside dropdown
-            h2("Settings"),
-            br(),
-            
-            # first option - sample with replacement?
-            radioGroupButtons(
-              "sampling_type",
-              div(icon("random"), "After question"),
-              selected = "with_replacement",
-              individual = TRUE,
-              justified = TRUE,
-              choices = c(
-                "Put word back" = "with_replacement",
-                "Remove word" = "without_replacement"
-              )
-            ),
-            
-            # second option - restrict vocabulary to specific lesson?
-            multiInput(
-              "lessons_to_include",
-              div(icon("filter"), "Lessons to include"),
-              selected = "all",
-              choiceNames = c("All", glue("Lesson: {lesson_nums}")),
-              choiceValues = c("all", list(lesson_nums))
-            ),
-            
-            # options for styling of dropdown
-            tooltip = tooltipOptions(title = "Additional options"),
-            icon = icon("cog"),
-            width = "300px"
-            
+            dropdownButton(
+              
+              # set id for dropdown, settings etc
+              inputId = "settings_dropdown",
+              
+              # title inside dropdown
+              h2("Settings"),
+              br(),
+              
+              # first option - sample with replacement?
+              radioGroupButtons(
+                "sampling_type",
+                div(icon("random"), "After question"),
+                selected = "with_replacement",
+                individual = TRUE,
+                justified = TRUE,
+                choices = c(
+                  "Put word back" = "with_replacement",
+                  "Remove word" = "without_replacement"
+                )
+              ),
+              
+              # second option - restrict vocabulary to specific lesson?
+              multiInput(
+                "lessons_to_include",
+                div(icon("filter"), "Lessons to include"),
+                selected = "all",
+                choiceNames = c("All", glue("Lesson: {lesson_nums}")),
+                choiceValues = c("all", list(lesson_nums))
+              ),
+              
+              # options for styling of dropdown
+              tooltip = tooltipOptions(title = "Additional options"),
+              icon = icon("cog"),
+              width = "300px"
+              
           )
         ),
         
@@ -253,6 +273,7 @@ ui <- fluidPage(
                 align = "center"
               )
             ),
+          br(),
           column(
             12,
             actionButton("get_new_question", "Generate New Question"),
@@ -260,7 +281,8 @@ ui <- fluidPage(
           ),
         )
       )
-      
+    
+    # close off test page
     ),
     
     # new page for full vocabulary
@@ -278,6 +300,9 @@ ui <- fluidPage(
 
 # backend server logic
 server <- function(input, output, session) {
+  
+  # move navbar items to the right
+  addClass(id = "page_nav_menu", class = "justify-content-end")
   
   # check that at least one lesson type selected by user; choose all if not
   observeEvent(
