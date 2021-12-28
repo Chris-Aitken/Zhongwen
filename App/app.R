@@ -21,16 +21,10 @@ vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
 
-# initialise empty df to add previously-served questions to
-previous_question_entries <- vocab %>% slice(0)
-
 # different choices for languages to test
 language_choices <- c("中文" = "mandarin",
                       "Pīnyīn" = "pinyin",
                       "English" = "english")
-
-# initialise score counters
-current_score <- 0
 
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
@@ -156,8 +150,32 @@ ui <- fluidPage(
            text-align: center;
          }
          
-         .sweet-alert p {
-           font-size: 20px;
+         div.sweet-alert p {
+           font-size: 22px;
+         }
+         
+         button.confirm {
+           background-color: rgb(220,112,105) !important;
+         }
+         
+         .sweet-alert .sa-icon.sa-success {
+           border-color: rgb(220,112,105) !important;
+         }
+         
+         .sweet-alert .sa-icon.sa-success .sa-line {
+           background-color: rgb(220,112,105) !important;
+         }
+         
+         .sweet-alert .sa-icon.sa-success .sa-placeholder {
+           border: 4px solid rgba(220,112,105,.4) !important;
+         }
+         
+         .sweet-alert .sa-icon.sa-error {
+           border-color: rgba(220,112,105,.4) !important;
+         }
+         
+         .sweet-alert .sa-icon.sa-error .sa-line {
+           background-color: rgb(220,112,105) !important;
          }
       ")
     )
@@ -324,6 +342,12 @@ ui <- fluidPage(
 
 # backend server logic
 server <- function(input, output, session) {
+  
+  # initialise empty df to add previously-served questions to
+  previous_question_entries <- vocab %>% slice(0)
+  
+  # initialise score counters
+  current_score <- 0
   
   # move navbar items to the right
   addClass(id = "page_nav_menu", class = "justify-content-end")
@@ -494,7 +518,7 @@ server <- function(input, output, session) {
           closeOnEsc = TRUE,
           closeOnClickOutside = TRUE,
           html = FALSE,
-          type = "warning",
+          type = "error",
           showConfirmButton = TRUE,
           confirmButtonText = "Close",
           showCancelButton = FALSE,
