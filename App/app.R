@@ -52,7 +52,7 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
   # if user has requested that entries from previous questions be removed, remove them
   if (no_replacement) {
     df_ed <- df_ed %>%
-             anti_join(previous_question_entries, by = {{ prompt_col }})
+             anti_join(exclude_df, by = {{ prompt_col }})
   }
   
   # remove entries for which one of prompt or response missing + rename
@@ -218,7 +218,20 @@ ui <- fluidPage(
               h2("Settings"),
               br(),
               
-              # first option - sample with replacement?
+              # first option - show score?
+              radioGroupButtons(
+                "show_score_choice",
+                div(icon("award"), "Performance"),
+                selected = TRUE,
+                individual = TRUE,
+                justified = TRUE,
+                choices = c(
+                  "Show score" = TRUE,
+                  "Hide score" = FALSE
+                )
+              ),
+              
+              # second option - sample with replacement?
               radioGroupButtons(
                 "sampling_type",
                 div(icon("random"), "After question"),
@@ -231,7 +244,7 @@ ui <- fluidPage(
                 )
               ),
               
-              # second option - restrict vocabulary to specific lesson?
+              # third option - restrict vocabulary to specific lesson?
               multiInput(
                 "lessons_to_include",
                 div(icon("filter"), "Lessons to include"),
@@ -299,7 +312,7 @@ ui <- fluidPage(
             12,
             actionButton("get_new_question", "Generate New Question"),
             align = "center"
-          ),
+          )
         )
       ),
       
@@ -308,15 +321,15 @@ ui <- fluidPage(
       fluidRow(
         column(
           12,
-          #hidden(
+          hidden(
             div(
               id = "vocab_test_score_box",
-              textOutput("test")
-            ),
-          #),
+              textOutput("score")
+            )
+          ),
           align = "center"
         )
-      ),
+      )
     
     # close off test page
     ),
@@ -348,6 +361,7 @@ server <- function(input, output, session) {
   
   # initialise score counters
   current_score <- 0
+  question_number <- 0
   
   # move navbar items to the right
   addClass(id = "page_nav_menu", class = "justify-content-end")
@@ -455,6 +469,8 @@ server <- function(input, output, session) {
   # update score counter
   observeEvent(
     input$submit_response, {
+      req(input$vocab_test_input)
+      question_number <<- question_number + 1
       if (isTRUE(check_answer_correct())) {
         current_score <<- current_score + 1
       }
@@ -464,11 +480,11 @@ server <- function(input, output, session) {
   # generate score statement
   gen_score_statement <- reactive({
                            input$submit_response
-                           paste0("Score: ", current_score, "/", input$submit_response)
+                           paste0("Score: ", current_score, "/", question_number)
                          })
   
-  # test
-  output$test <- renderText(gen_score_statement())
+  # send score to ui
+  output$score <- renderText(gen_score_statement())
 
   # report whether user is correct or missed the mark
   observeEvent(
@@ -536,6 +552,21 @@ server <- function(input, output, session) {
         
       }
 
+    }
+  )
+  
+  # convert radio input to logical var for below
+  show_score <- reactive(as.logical(input$show_score_choice))
+  
+  # hide or unhide score
+  observeEvent({
+      show_score() | input$alert_correct_answer | input$alert_incorrect_answer
+    }, {
+      if (input$submit_response >= 1 && show_score()) {
+        show("vocab_test_score_box", anim = TRUE, animType = "fade")
+      } else {
+        hide("vocab_test_score_box", anim = TRUE, animType = "fade")
+      }
     }
   )
   
