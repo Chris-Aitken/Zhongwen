@@ -22,6 +22,10 @@ vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
 
+# named lesson choices
+lesson_choices <- c("all", list(lesson_nums)) %>%
+                  setNames(c("All", glue("Lesson: {lesson_nums}")))
+
 # different choices for languages to test
 language_choices <- c("中文" = "mandarin",
                       "Pīnyīn" = "pinyin",
@@ -80,7 +84,8 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
 
 # function for checking strings of text match (approximately)
 check_equal <- function(expected, val_to_check) {
-  expected <- strsplit(expected, split = ",") %>% unlist()
+  expected <- unlist(strsplit(expected, split = ","))
+  val_to_check <- gsub("[[:punct:]]", "", val_to_check)
   any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
 }
 
@@ -110,8 +115,8 @@ disable_radio_options <- function(radio_input_id, options, disable_if_equal_to) 
   
 }
 
-# function for rounding to nearest multiple
-round_to_multiple <- function(num, multiple_of) {
+# function for rounding (down) to nearest multiple
+round_to <- function(num, multiple_of) {
   floor(num / multiple_of) * multiple_of
 }
 
@@ -127,7 +132,7 @@ ui <- fluidPage(
       HTML("
          .navbar {
            padding: 0.5rem 0rem;
-           border-bottom: 1px solid #dee2e6 !important;
+           border-bottom: 1px solid rgba(0,0,0,0.3) !important;
          }
          
          .navbar.navbar-default{
@@ -186,6 +191,11 @@ ui <- fluidPage(
          
          .sweet-alert .sa-icon.sa-error .sa-line {
            background-color: rgb(220,112,105) !important;
+         }
+         
+         .rt-search {
+           margin-bottom: 10pt;
+           align-self: start;
          }
       ")
     )
@@ -276,8 +286,8 @@ ui <- fluidPage(
                 "lessons_to_include",
                 div(icon("filter"), "Lessons to include"),
                 selected = "all",
-                choiceNames = c("All", glue("Lesson: {lesson_nums}")),
-                choiceValues = c("all", list(lesson_nums))
+                choiceNames = names(lesson_choices),
+                choiceValues = unname(lesson_choices)
               ),
               
               # options for styling of dropdown
@@ -329,8 +339,18 @@ ui <- fluidPage(
             fluidRow(
               column(
                 12,
-                div(style="display:inline-block;vertical-align:top;", textInput("vocab_test_input", label = NULL)),
-                div(style="display:inline-block;vertical-align:top;", actionButton("submit_response", label = "Submit")),
+                div(
+                  style = "display:inline-block;vertical-align:top;",
+                  textInput(
+                    "vocab_test_input",
+                    label = NULL, 
+                    placeholder = "Enter response"
+                  )
+                ),
+                div(
+                  style = "display:inline-block;vertical-align:top;",
+                  actionButton("submit_response", label = "Submit")
+                ),
                 align = "center"
               )
             ),
@@ -356,7 +376,11 @@ ui <- fluidPage(
           ),
           align = "center"
         )
-      )
+      ),
+      
+      # add vertical whitespace
+      br(),
+      br()
     
     # close off test page
     ),
@@ -364,6 +388,24 @@ ui <- fluidPage(
     # new page for full vocabulary
     tabPanel(
       "Full Vocabulary",
+      
+      # selection of lessons to restrict vocab to
+      br(),
+      fluidRow(
+        column(
+          12,
+          pickerInput(
+            "full_vocab_lesson_selection",
+            div(icon("filter"), "Lessons to include"),
+            multiple = TRUE,
+            selected = "all",
+            options = list(`selected-text-format` = "count > 4"),
+            choices = lesson_choices
+          ),
+          align = "center"
+        )
+      ),
+      br(),
       
       # vocabulary in a table
       reactableOutput("vocab_table")
@@ -633,8 +675,9 @@ server <- function(input, output, session) {
   # get table height (38 default height of row if not broken over several lines)
   get_table_height <- reactive({
                         (get_window_dimensions()$height - get_bottom_margin_size()) %>%
-                          round_to_multiple(multiple_of = 38) %>%
-                          max(., 76) # ensure something is shown
+                          `-`(., 130) %>%                   # account for size of options
+                          round_to(multiple_of = 38) %>%    # find height in num of full rows
+                          max(., 76)                        # ensure something is shown
                       })
   
   # full vocabulary
