@@ -24,7 +24,7 @@ lesson_nums <- unique(vocab$lesson)
 
 # named lesson choices
 lesson_choices <- c("all", list(lesson_nums)) %>%
-                  setNames(c("All", glue("Lesson: {lesson_nums}")))
+                  setNames(c("All", glue("Lesson {lesson_nums}")))
 
 # different choices for languages to test
 language_choices <- c("中文" = "mandarin",
@@ -39,13 +39,18 @@ strip_notes <- function(text_in) {
     trimws()
 }
 
+# function for processing lesson selections
+process_lesson_selection <- function(lesson_selection) {
+  ifelse(is.null(lesson_selection), "all", lesson_selection) %>%
+    {ifelse(. == "all", lesson_nums, lesson_selection)}
+}
+
 # function for getting a random entry from vocab list
 get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sampling_type, exclude_df) {
   
   # check we have at least some lessons selected, set to all if not
   # then replace "all" flag with all lesson nums
-  lesson_selection <- ifelse(is.null(lesson_selection), "all", lesson_selection) %>%
-                      {ifelse(. == "all", lesson_nums, lesson_selection)}
+  lesson_selection <- process_lesson_selection(lesson_selection)
   
   # change sampling type flag to logical for below
   no_replacement <- ifelse(sampling_type == "without_replacement", TRUE, FALSE)
@@ -120,6 +125,11 @@ round_to <- function(num, multiple_of) {
   floor(num / multiple_of) * multiple_of
 }
 
+# function for removing catch-all category if multiple present
+remove_catch_all_category <- function(elements, name) {
+  elements[elements != name]
+}
+
 # user interface
 ui <- fluidPage(
   
@@ -129,19 +139,23 @@ ui <- fluidPage(
   # some quick inline css
   tags$head(
     tags$style(
-      HTML("
+      HTML('
          .navbar {
            padding: 0.5rem 0rem;
            border-bottom: 1px solid rgba(0,0,0,0.3) !important;
          }
          
-         .navbar.navbar-default{
+         .navbar.navbar-default {
            border: none
          }
          
-         .navbar-nav > li{
+         .navbar-nav > li {
            padding-left:10px;
            padding-right:10px;
+         }
+         
+         .navbar-light .navbar-toggler, .navbar-light .navbar-toggle, .navbar.navbar-default .navbar-toggler, .navbar.navbar-default .navbar-toggle {
+           border-color: rgba(0,0,0,0.2);
          }
       
          .dropdown-toggle::after {
@@ -197,7 +211,11 @@ ui <- fluidPage(
            margin-bottom: 10pt;
            align-self: start;
          }
-      ")
+         
+         .header:hover {
+           background-color: #eee;
+         }
+      ')
     )
   ),
   
@@ -283,7 +301,7 @@ ui <- fluidPage(
               
               # third option - restrict vocabulary to specific lesson?
               multiInput(
-                "lessons_to_include",
+                "test_lessons_to_include",
                 div(icon("filter"), "Lessons to include"),
                 selected = "all",
                 choiceNames = names(lesson_choices),
@@ -395,7 +413,7 @@ ui <- fluidPage(
         column(
           12,
           pickerInput(
-            "full_vocab_lesson_selection",
+            "full_vocab_lessons_to_include",
             div(icon("filter"), "Lessons to include"),
             multiple = TRUE,
             selected = "all",
@@ -409,7 +427,7 @@ ui <- fluidPage(
       
       # vocabulary in a table
       reactableOutput("vocab_table")
-    
+      
     ),
     
     # new page for key phrases
@@ -438,8 +456,16 @@ server <- function(input, output, session) {
   # check that at least one lesson type selected by user; choose all if not
   observeEvent(
     input$settings_dropdown, {
-      if (is.null(input$lessons_to_include)) {
-        updateMultiInput(session = session, inputId = "lessons_to_include", selected = "all")
+      if (is.null(input$test_lessons_to_include)) {
+        updateMultiInput(session = session, inputId = "test_lessons_to_include", selected = "all")
+      } else if (length(input$test_lessons_to_include) > 1 &&
+                 "all" %in% input$test_lessons_to_include) {
+        updateMultiInput(
+          session = session,
+          inputId = "test_lessons_to_include",
+          selected = input$test_lessons_to_include %>%
+                       remove_catch_all_category(name = "all")
+        )
       }
     }
   )
@@ -473,7 +499,7 @@ server <- function(input, output, session) {
                            get_random_entry(
                              prompt_col = input$prompt_type,
                              response_col = input$response_type,
-                             lesson_selection = input$lessons_to_include,
+                             lesson_selection = input$test_lessons_to_include,
                              sampling_type = input$sampling_type,
                              exclude_df = previous_question_entries
                            )
@@ -653,9 +679,34 @@ server <- function(input, output, session) {
       input$prompt_type
       input$response_type
       input$sampling_type
-      input$lessons_to_include
+      input$test_lessons_to_include
     }, {
       updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
+    }
+  )
+  
+  # as above, check that at least one lesson type selected by user for vocab table
+  # only update when picker input closes: '_open' append let's you know if it's open
+  # see ?pickerInput
+  observeEvent(
+    input$full_vocab_lessons_to_include_open, {
+      if (isFALSE(input$full_vocab_lessons_to_include_open)) {
+        if (is.null(input$full_vocab_lessons_to_include)) {
+          updatePickerInput(
+            session = session,
+            inputId = "full_vocab_lessons_to_include",
+            selected = "all"
+          )
+        } else if (length(input$full_vocab_lessons_to_include) > 1 && 
+                   "all" %in% input$full_vocab_lessons_to_include) {
+          updatePickerInput(
+            session = session,
+            inputId = "full_vocab_lessons_to_include",
+            selected = input$full_vocab_lessons_to_include %>%
+                         remove_catch_all_category(name = "all")
+          )
+        }
+      }
     }
   )
   
@@ -667,42 +718,55 @@ server <- function(input, output, session) {
                              )
                            })
   
-  # get lower margin height below table
+  # get lower margin height below table (min size, plus extra if on big screens)
   get_bottom_margin_size <- reactive({
                               min(0.15 * get_window_dimensions()$height, 150)
                             })
   
+  # declare size of row (height)
+  row_height <- 38
+  
   # get table height (38 default height of row if not broken over several lines)
-  get_table_height <- reactive({
-                        (get_window_dimensions()$height - get_bottom_margin_size()) %>%
-                          `-`(., 130) %>%                   # account for size of options
-                          round_to(multiple_of = 38) %>%    # find height in num of full rows
-                          max(., 76)                        # ensure something is shown
-                      })
+  get_vocab_table_height <- reactive({
+                              (get_window_dimensions()$height - get_bottom_margin_size()) %>%
+                                `-`(., 130) %>%                           # account for size of options
+                                round_to(multiple_of = row_height) %>%    # find height in num of full rows
+                                max(., row_height * 2)                    # ensure something is shown
+                            })
+  
+  # get vocab table data
+  get_vocab_table_data <- reactive({
+                            vocab %>%
+                             filter(
+                               lesson %in% 
+                                 process_lesson_selection(
+                                   input$full_vocab_lessons_to_include
+                                 )
+                             ) %>%
+                             select(-lesson) %>%
+                             rename(
+                               "English" = english,
+                               "Pīnyīn" = pinyin,
+                               "Mandarin" = mandarin
+                             )
+                          })
   
   # full vocabulary
   output$vocab_table <- renderReactable(
                           reactable(
-                            select(vocab, -lesson) %>%
-                              rename(
-                                "English" = english,
-                                "Pīnyīn" = pinyin,
-                                "Mandarin" = mandarin
-                              ),
+                            get_vocab_table_data(),
                             borderless = TRUE,
                             searchable = TRUE,
                             pagination = FALSE,
                             highlight = TRUE,
-                            height = get_table_height(),
+                            height = get_vocab_table_height(),
+                            defaultColDef = colDef(headerClass = "header", align = "left"),
+                            defaultSorted = NULL,
                             columns = list(
                               English = colDef(na = "-")
                             )
                           )
                         )
-  
-  # add some whitespace below table
-  br()
-  br()
   
 }
 
