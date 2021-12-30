@@ -4,6 +4,7 @@ library(shiny)
 library(shinyalert)
 library(shinyWidgets)
 library(shinyjs)
+library(reactable)
 library(bslib)
 library(readxl)
 library(dplyr)
@@ -109,6 +110,11 @@ disable_radio_options <- function(radio_input_id, options, disable_if_equal_to) 
   
 }
 
+# function for rounding to nearest multiple
+round_to_multiple <- function(num, multiple_of) {
+  floor(num / multiple_of) * multiple_of
+}
+
 # user interface
 ui <- fluidPage(
   
@@ -135,6 +141,10 @@ ui <- fluidPage(
       
          .dropdown-toggle::after {
            display: none;
+         }
+         
+         #dropdown-menu-settings_dropdown {
+           box-shadow: 0 50px 100px rgba(50,50,93,.1),0 15px 35px rgba(50,50,93,.15),0 5px 15px rgba(0,0,0,.1);
          }
          
          .form-group {
@@ -179,6 +189,23 @@ ui <- fluidPage(
          }
       ")
     )
+  ),
+  
+  # add js script to check dimensions of browser for vocab table
+  tags$head(
+    tags$script('
+        var dimension = [0, 0];
+        $(document).on("shiny:connected", function(e) {
+            dimension[0] = window.innerWidth;
+            dimension[1] = window.innerHeight;
+            Shiny.onInputChange("dimension", dimension);
+        });
+        $(window).resize(function(e) {
+            dimension[0] = window.innerWidth;
+            dimension[1] = window.innerHeight;
+            Shiny.onInputChange("dimension", dimension);
+        });
+    ')
   ),
   
   # set up necessary additional details
@@ -339,7 +366,7 @@ ui <- fluidPage(
       "Full Vocabulary",
       
       # vocabulary in a table
-      dataTableOutput("vocab_table")
+      reactableOutput("vocab_table")
     
     ),
     
@@ -590,11 +617,49 @@ server <- function(input, output, session) {
     }
   )
   
+  # get dimensions of window for below
+  get_window_dimensions <- reactive({
+                             tibble(
+                               width = input$dimension[1],
+                               height = input$dimension[2]
+                             )
+                           })
+  
+  # get lower margin height below table
+  get_bottom_margin_size <- reactive({
+                              min(0.15 * get_window_dimensions()$height, 150)
+                            })
+  
+  # get table height (38 default height of row if not broken over several lines)
+  get_table_height <- reactive({
+                        (get_window_dimensions()$height - get_bottom_margin_size()) %>%
+                          round_to_multiple(multiple_of = 38) %>%
+                          max(., 76) # ensure something is shown
+                      })
+  
   # full vocabulary
-  output$vocab_table <- renderDataTable(
-                          select(vocab, -lesson),
-                          options = list(pageLength = 10)
+  output$vocab_table <- renderReactable(
+                          reactable(
+                            select(vocab, -lesson) %>%
+                              rename(
+                                "English" = english,
+                                "Pīnyīn" = pinyin,
+                                "Mandarin" = mandarin
+                              ),
+                            borderless = TRUE,
+                            searchable = TRUE,
+                            pagination = FALSE,
+                            highlight = TRUE,
+                            height = get_table_height(),
+                            columns = list(
+                              English = colDef(na = "-")
+                            )
+                          )
                         )
+  
+  # add some whitespace below table
+  br()
+  br()
   
 }
 
