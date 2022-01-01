@@ -11,13 +11,16 @@ library(dplyr)
 library(tidyr)
 library(purrr)
 library(glue)
+library(lubridate)
+library(htmltools)
 
 # declare path to app files locally
 path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
 
 # load vocabulary with translations
 vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
-         read_excel()
+         read_excel() %>%
+         mutate(entry_id = row_number())
 
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
@@ -62,7 +65,7 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
   # if user has requested that entries from previous questions be removed, remove them
   if (no_replacement) {
     df_ed <- df_ed %>%
-             anti_join(exclude_df, by = {{ prompt_col }})
+             anti_join(exclude_df, by = "entry_id")
   }
   
   # remove entries for which one of prompt or response missing + rename
@@ -215,6 +218,35 @@ ui <- fluidPage(
          .header:hover {
            background-color: #eee;
          }
+         
+         .bar-cell {
+           display: flex;
+           align-items: center;
+         }
+        
+         .number {
+           font-family: "Fira Mono", Consolas, Monaco, monospace;
+           font-size: 13.5px;
+           white-space: pre;
+         }
+        
+         .bar-chart {
+           flex-grow: 1;
+           margin-left: 6px;
+           height: 14px;
+         }
+         
+         .bar-chart-background-present {
+           background-color: #e1e1e1
+         }
+         
+         .bar-chart-background-missing {
+           background-color: #f5f5f5
+         }
+        
+         .bar {
+           height: 100%;
+         }
       ')
     )
   ),
@@ -248,11 +280,13 @@ ui <- fluidPage(
     # home page
     tabPanel(
       "Home",
+      value = "home"
     ),
     
     # test page
     tabPanel(
       "Test Vocabulary Recall",
+      value = "vocab_test",
   
       # add some vertical space
       tags$hr(style = "height:5px; visibility:hidden;"),
@@ -406,6 +440,7 @@ ui <- fluidPage(
     # new page for full vocabulary
     tabPanel(
       "Full Vocabulary",
+      value = "vocab_table",
       
       # selection of lessons to restrict vocab to
       br(),
@@ -433,7 +468,7 @@ ui <- fluidPage(
     # new page for key phrases
     tabPanel(
       "Key Phrases",
-      
+      value = "key_phrases"
     )
   
   )
@@ -449,6 +484,16 @@ server <- function(input, output, session) {
   # initialise score counters
   current_score <- 0
   question_number <- 0
+  
+  # initialise empty dataframe for storing question-response info (for result charts)
+  question_response_history <- tibble(
+                                 date_time = Date(),
+                                 entry_id = integer(),
+                                 prompt = character(),
+                                 correct_response = character(),
+                                 actual_response = character(),
+                                 was_correct = logical()
+                               )
   
   # move navbar items to the right
   addClass(id = "page_nav_menu", class = "justify-content-end")
@@ -658,10 +703,27 @@ server <- function(input, output, session) {
       show_score() | input$alert_correct_answer | input$alert_incorrect_answer
     }, {
       if (input$submit_response >= 1 && show_score()) {
-        show("vocab_test_score_box", anim = TRUE, animType = "fade")
+        shinyjs::show("vocab_test_score_box", anim = TRUE, animType = "fade")
       } else {
-        hide("vocab_test_score_box", anim = TRUE, animType = "fade")
+        shinyjs::hide("vocab_test_score_box", anim = TRUE, animType = "fade")
       }
+    }
+  )
+  
+  # capture record of question, response, correctness etc for vocab table
+  observeEvent(
+    input$submit_response, {
+      question_response_history <<- bind_rows(
+                                      question_response_history,
+                                      tibble(
+                                        date_time = now(),
+                                        entry_id = gen_test_question()$entry_id,
+                                        prompt = gen_test_question()$prompt,
+                                        correct_response = gen_test_question()$correct_response,
+                                        actual_response = input$vocab_test_input,
+                                        was_correct = isTRUE(check_answer_correct())
+                                      )
+                                    )
     }
   )
   
@@ -736,19 +798,22 @@ server <- function(input, output, session) {
   
   # get vocab table data
   get_vocab_table_data <- reactive({
+                            input$nav_bar_menu
                             vocab %>%
                              filter(
-                               lesson %in% 
-                                 process_lesson_selection(
-                                   input$full_vocab_lessons_to_include
-                                 )
+                               lesson %in% process_lesson_selection(
+                                             input$full_vocab_lessons_to_include
+                                           )
                              ) %>%
-                             select(-lesson) %>%
-                             rename(
-                               "English" = english,
-                               "Pīnyīn" = pinyin,
-                               "Mandarin" = mandarin
-                             )
+                             left_join(
+                               question_response_history %>%
+                                 group_by(entry_id) %>%
+                                 summarise(total = n(), correct = sum(was_correct)) %>%
+                                 mutate(performance = paste0(correct, "/", total)) %>%
+                                 select(-c(correct, total)),
+                               by = "entry_id"
+                             ) %>% 
+                             select(-c(lesson, entry_id))
                           })
   
   # full vocabulary
@@ -763,7 +828,33 @@ server <- function(input, output, session) {
                             defaultColDef = colDef(headerClass = "header", align = "left"),
                             defaultSorted = NULL,
                             columns = list(
-                              English = colDef(na = "-")
+                              english = colDef(name = "English", na = "-", defaultSortOrder = "asc"),
+                              pinyin = colDef(name = "Pīnyīn", na = "-", sortable = FALSE),
+                              mandarin = colDef(name = "Chinese", na = "-", sortable = FALSE),
+                              performance = colDef(
+                                name = "Recall Test Performance",
+                                sortable = FALSE,
+                                show = get_window_dimensions()$width > 780,
+                                cell = function(value) {
+                                  if (!is.na(value)) {
+                                    evaluated_value <- eval(parse(text = value))
+                                    chart_background_type <- "present"
+                                  } else {
+                                    evaluated_value <- 0
+                                    chart_background_type <- "missing"
+                                  }
+                                  width <- paste0(evaluated_value * 100, "%")
+                                  max_len <- max(nchar(get_vocab_table_data()$performance), 0, na.rm = TRUE)
+                                  padding_str <- glue("% {max_len}s")
+                                  value <- sprintf(padding_str, value) %>% format(., justify = "right")
+                                  bar <- div(
+                                    class = paste0("bar-chart bar-chart-background-", chart_background_type),
+                                    style = list(marginRight = "6px"),
+                                    div(class = "bar", style = list(width = width, backgroundColor = "#919191")) # "#dc7169"
+                                  )
+                                  div(class = "bar-cell", span(class = "number", value), bar)
+                                }
+                              )
                             )
                           )
                         )
