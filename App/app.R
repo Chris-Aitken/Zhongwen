@@ -798,7 +798,7 @@ server <- function(input, output, session) {
   
   # get vocab table data
   get_vocab_table_data <- reactive({
-                            input$nav_bar_menu
+                            input$page_nav_menu
                             vocab %>%
                              filter(
                                lesson %in% process_lesson_selection(
