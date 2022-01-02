@@ -149,16 +149,28 @@ ui <- fluidPage(
          }
          
          .navbar.navbar-default {
-           border: none
+           border: none;
          }
          
          .navbar-nav > li {
-           padding-left:10px;
-           padding-right:10px;
+           padding-left: 10px;
+           padding-right: 10px;
          }
          
          .navbar-light .navbar-toggler, .navbar-light .navbar-toggle, .navbar.navbar-default .navbar-toggler, .navbar.navbar-default .navbar-toggle {
            border-color: rgba(0,0,0,0.2);
+         }
+         
+         #home_title_prefix {
+           font-size: 1.05rem;
+         }
+         
+         #home_title_english {
+           margin-top: 0.1rem;
+           margin-bottom: .5rem;
+           font-family: "News Cycle","Arial Narrow Bold",sans-serif;
+           font-weight: 700;
+           line-height: 1.1;
          }
       
          .dropdown-toggle::after {
@@ -237,15 +249,19 @@ ui <- fluidPage(
          }
          
          .bar-chart-background-present {
-           background-color: #e1e1e1
+           background-color: #e1e1e1;
          }
          
          .bar-chart-background-missing {
-           background-color: #f5f5f5
+           background-color: #f5f5f5;
          }
         
          .bar {
            height: 100%;
+         }
+         
+         #score {
+           font-size: 0.9rem;
          }
       ')
     )
@@ -280,7 +296,48 @@ ui <- fluidPage(
     # home page
     tabPanel(
       "Home",
-      value = "home"
+      value = "home",
+      
+      # homepage text
+      column(
+        10,
+        br(),
+        div(strong("A Revision Tool", id = "home_title_prefix"), "For"),
+        div(h1("Contemporary Chinese", id = "home_title_english"), p("For Beginners")),
+        h1("当代中文"),
+        br(),
+        tags$hr(style = "height:30px; visibility:hidden;"),
+        p(
+          paste0(
+            "Learning Chinese can be challenging. This app provides a set of tools to help ",
+            "those learning the language. It is primarily geared towards students who are native English speakers, ",
+            "and it is intended to serve as a complement to the"
+          ),
+          em("Contemporary Chinese"), "book series by Sinolingua."
+        ),
+        p(
+          paste0(
+            "The main feature of the app is a recall test, which allows students to evaluate and ",
+            "improve their command of the vocabulary introduced by the book. The parameters ",
+            "of the test can be adjusted freely, so that one can test their ability to recognise characters ",
+            "and pīnyīn, as well as respond appropriately with them."
+          )
+        ),
+        p(
+          paste0(
+            "Alongside that, the full vocabulary is provided separately to reference. It is ",
+            "searchable (in English, Pīnyīn and Chinese) and can be filtered by book chapter. Key phrases introduced by ",
+            "the book are also available."
+          )
+        ),
+        p(
+          paste0(
+            "Students' performance is tracked during a browsing session, but no data ",
+            "is retained when the session ends."
+          )
+        )
+      )
+      
     ),
     
     # test page
@@ -423,7 +480,9 @@ ui <- fluidPage(
           hidden(
             div(
               id = "vocab_test_score_box",
-              textOutput("score")
+              "Score: ",
+              textOutput("score", inline = TRUE) %>% 
+                tagAppendAttributes(class = "number")
             )
           ),
           align = "center"
@@ -620,7 +679,7 @@ server <- function(input, output, session) {
   # generate score statement
   gen_score_statement <- reactive({
                            input$submit_response
-                           paste0("Score: ", current_score, "/", question_number)
+                           paste0(current_score, "/", question_number)
                          })
   
   # send score to ui
@@ -797,24 +856,25 @@ server <- function(input, output, session) {
                             })
   
   # get vocab table data
-  get_vocab_table_data <- reactive({
-                            input$page_nav_menu
-                            vocab %>%
-                             filter(
-                               lesson %in% process_lesson_selection(
-                                             input$full_vocab_lessons_to_include
-                                           )
-                             ) %>%
-                             left_join(
-                               question_response_history %>%
-                                 group_by(entry_id) %>%
-                                 summarise(total = n(), correct = sum(was_correct)) %>%
-                                 mutate(performance = paste0(correct, "/", total)) %>%
-                                 select(-c(correct, total)),
-                               by = "entry_id"
-                             ) %>% 
-                             select(-c(lesson, entry_id))
-                          })
+  get_vocab_table_data <- eventReactive(
+                            input$page_nav_menu == "vocab_table", {
+                              vocab %>%
+                               filter(
+                                 lesson %in% process_lesson_selection(
+                                               input$full_vocab_lessons_to_include
+                                             )
+                               ) %>%
+                               left_join(
+                                 question_response_history %>%
+                                   group_by(entry_id) %>%
+                                   summarise(total = n(), correct = sum(was_correct)) %>%
+                                   mutate(performance = paste0(correct, "/", total)) %>%
+                                   select(-c(correct, total)),
+                                 by = "entry_id"
+                               ) %>% 
+                               select(-c(lesson, entry_id))
+                            }
+                          )
   
   # full vocabulary
   output$vocab_table <- renderReactable(
