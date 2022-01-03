@@ -26,7 +26,7 @@ vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
 lesson_nums <- unique(vocab$lesson)
 
 # named lesson choices
-lesson_choices <- c("all", list(lesson_nums)) %>%
+lesson_choices <- c("all", lesson_nums) %>%
                   setNames(c("All", glue("Lesson {lesson_nums}")))
 
 # different choices for languages to test
@@ -44,8 +44,8 @@ strip_notes <- function(text_in) {
 
 # function for processing lesson selections
 process_lesson_selection <- function(lesson_selection) {
-  ifelse(is.null(lesson_selection), "all", lesson_selection) %>%
-    {ifelse(. == "all", lesson_nums, lesson_selection)}
+  int_val <- if (is.null(lesson_selection)) "all" else lesson_selection
+  if (identical(int_val, "all")) lesson_nums else lesson_selection
 }
 
 # function for getting a random entry from vocab list
@@ -511,7 +511,7 @@ ui <- fluidPage(
             div(icon("filter"), "Lessons to include"),
             multiple = TRUE,
             selected = "all",
-            options = list(`selected-text-format` = "count > 4"),
+            options = list(`selected-text-format` = "count > 3"),
             choices = lesson_choices
           ),
           align = "center"
@@ -714,7 +714,7 @@ server <- function(input, output, session) {
           confirmButtonText = "Close",
           showCancelButton = FALSE,
           timer = 10000,
-          animation = TRUE,
+          animation = FALSE,
           inputId = "alert_correct_answer",
           text = sprintf(
                    "'%s' (%s) translates to '%s'",
@@ -739,7 +739,7 @@ server <- function(input, output, session) {
           showCancelButton = FALSE,
           timer = 10000,
           imageUrl = "",
-          animation = TRUE,
+          animation = FALSE,
           inputId = "alert_incorrect_answer",
           text = sprintf(
             "'%s' (%s) translates to '%s'",
@@ -856,8 +856,10 @@ server <- function(input, output, session) {
                             })
   
   # get vocab table data
-  get_vocab_table_data <- eventReactive(
-                            input$page_nav_menu == "vocab_table", {
+  get_vocab_table_data <- eventReactive({
+                              input$page_nav_menu == "vocab_table"
+                              isFALSE(input$full_vocab_lessons_to_include_open)
+                            }, {
                               vocab %>%
                                filter(
                                  lesson %in% process_lesson_selection(
