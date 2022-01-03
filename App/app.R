@@ -138,6 +138,26 @@ remove_catch_all_category <- function(elements, name) {
   elements[elements != name]
 }
 
+# seq_along for df rows
+rows_along <- function(df) seq(nrow(df))
+
+# function for constructing cards
+create_card <- function(mandarin, pinyin, english) {
+  HTML(
+    paste0('
+      <div class="card">
+        <div>
+          <h4>', mandarin, '</h4>
+          <hr>
+        </div>
+        <div class="card-container-bottom">',
+          pinyin,'
+        </div>
+      </div>
+    ')
+  )
+}
+
 # user interface
 ui <- fluidPage(
   
@@ -267,6 +287,28 @@ ui <- fluidPage(
          
          #score {
            font-size: 0.9rem;
+         }
+         
+         .card {
+           clear: both;
+           box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+           transition: 0.2s;
+           padding-left: 16px;
+           padding-right: 16px;
+           margin-bottom: 20px;
+         }
+         
+         .card:hover {
+           box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
+         }
+         
+         .card-container-bottom {
+           padding-bottom: 12px;
+         }
+         
+         div.card hr {
+           margin-top: 12px;
+           margin-bottom: 12px;
          }
       ')
     )
@@ -555,7 +597,17 @@ ui <- fluidPage(
     # new page for key phrases
     tabPanel(
       "Key Phrases",
-      value = "key_phrases"
+      value = "key_phrases",
+      
+      # display cards containing key phrases
+      fluidRow(
+        column(
+          12,
+          uiOutput("phrase_cards"),
+          align = "center"
+        )
+      )
+      
     )
   
   )
@@ -915,39 +967,67 @@ server <- function(input, output, session) {
                             pagination = FALSE,
                             highlight = TRUE,
                             height = get_vocab_table_height(),
-                            defaultColDef = colDef(headerClass = "header", align = "left"),
                             defaultSorted = NULL,
+                            defaultColDef = colDef(headerClass = "header", align = "left"),
                             columns = list(
                               english = colDef(name = "English", na = "-", defaultSortOrder = "asc"),
                               pinyin = colDef(name = "Pīnyīn", na = "-", sortable = FALSE),
                               mandarin = colDef(name = "Chinese", na = "-", sortable = FALSE),
                               performance = colDef(
-                                name = "Recall Test Performance",
-                                sortable = FALSE,
-                                show = get_window_dimensions()$width > 780,
-                                cell = function(value) {
-                                  if (!is.na(value)) {
-                                    evaluated_value <- eval(parse(text = value))
-                                    chart_background_type <- "present"
-                                  } else {
-                                    evaluated_value <- 0
-                                    chart_background_type <- "missing"
-                                  }
-                                  width <- paste0(evaluated_value * 100, "%")
-                                  max_len <- max(nchar(get_vocab_table_data()$performance), 0, na.rm = TRUE)
-                                  padding_str <- glue("% {max_len}s")
-                                  value <- sprintf(padding_str, value) %>% format(., justify = "right")
-                                  bar <- div(
-                                    class = paste0("bar-chart bar-chart-background-", chart_background_type),
-                                    style = list(marginRight = "6px"),
-                                    div(class = "bar", style = list(width = width, backgroundColor = "#919191")) # "#dc7169"
-                                  )
-                                  div(class = "bar-cell", span(class = "number", value), bar)
-                                }
-                              )
+                                              name = "Recall Test Performance",
+                                              sortable = FALSE,
+                                              show = get_window_dimensions()$width > 780,
+                                              cell = function(value) {
+                                                if (!is.na(value)) {
+                                                  evaluated_value <- eval(parse(text = value))
+                                                  chart_background_type <- "present"
+                                                } else {
+                                                  evaluated_value <- 0
+                                                  chart_background_type <- "missing"
+                                                }
+                                                width <- paste0(evaluated_value * 100, "%")
+                                                max_len <- max(nchar(get_vocab_table_data()$performance), 0, na.rm = TRUE)
+                                                padding_str <- glue("% {max_len}s")
+                                                value <- sprintf(padding_str, value) %>% format(., justify = "right")
+                                                bar <- div(
+                                                  class = paste0("bar-chart bar-chart-background-", chart_background_type),
+                                                  style = list(marginRight = "6px"),
+                                                  div(class = "bar", style = list(width = width, backgroundColor = "#919191")) # "#dc7169"
+                                                )
+                                                div(class = "bar-cell", span(class = "number", value), bar)
+                                              }
+                                            )
                             )
                           )
                         )
+  
+  # render cards showing key phrases
+  output$phrase_cards <- renderUI({
+                           
+                           # make cards
+                           html_cards <- rows_along(phrases) %>%
+                                         map( ~ {
+                                           create_card(
+                                             mandarin = phrases$mandarin[.x],
+                                             pinyin = phrases$pinyin[.x],
+                                             english = phrases$english[.x]
+                                           )
+                                         })
+                           
+                           # add styling
+                           # html_cards$cellArgs <- list(
+                           #                          style =
+                           #                            paste0(
+                           #                              "width: auto;
+                           #                               height: auto;
+                           #                               margin: 20px;"
+                           #                            )
+                           #                        )
+                           
+                           # now lay out cards left to right + top to bottom
+                           do.call(shiny::flowLayout, html_cards)
+    
+                         })
   
 }
 
