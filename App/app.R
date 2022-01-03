@@ -13,6 +13,7 @@ library(purrr)
 library(glue)
 library(lubridate)
 library(htmltools)
+library(shinycssloaders)
 
 # declare path to app files locally
 path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
@@ -21,6 +22,10 @@ path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
 vocab <- glue("{path_to_project}/Data/vocabulary.xlsx") %>%
          read_excel() %>%
          mutate(entry_id = row_number())
+
+# load phrases as well
+phrases <- glue("{path_to_project}/Data/phrases.xlsx") %>%
+           read_excel()
 
 # chapters of book vocabulary is from
 lesson_nums <- unique(vocab$lesson)
@@ -284,6 +289,27 @@ ui <- fluidPage(
     ')
   ),
   
+  # and another to allow for <return> to proxy for clicking submit in test
+  tags$head(
+    tags$script('
+        $(function() {
+          var $els = $("[data-proxy-click]");
+          $.each(
+            $els,
+            function(idx, el) {
+              var $el = $(el);
+              var $proxy = $("#" + $el.data("proxyClick"));
+              $el.keydown(function (e) {
+                if (e.keyCode == 13) {
+                  $proxy.click();
+                }
+              });
+            }
+          );
+        });
+    ')
+  ),
+  
   # set up necessary additional details
   useShinyjs(),
   
@@ -454,7 +480,8 @@ ui <- fluidPage(
                     "vocab_test_input",
                     label = NULL, 
                     placeholder = "Enter response"
-                  )
+                  ) %>%
+                    tagAppendAttributes(`data-proxy-click` = "submit_response")
                 ),
                 div(
                   style = "display:inline-block;vertical-align:top;",
@@ -520,7 +547,8 @@ ui <- fluidPage(
       br(),
       
       # vocabulary in a table
-      reactableOutput("vocab_table")
+      reactableOutput("vocab_table") %>%
+        withSpinner(type = 8, color = "#919191", size = 0.9)
       
     ),
     
