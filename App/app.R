@@ -145,13 +145,16 @@ rows_along <- function(df) seq(nrow(df))
 create_card <- function(mandarin, pinyin, english) {
   HTML(
     paste0('
-      <div class="card">
-        <div>
-          <h4>', mandarin, '</h4>
-          <hr>
-        </div>
-        <div class="card-container-bottom">',
-          pinyin,'
+      <div class="flip-card">
+        <div class="flip-card-inner">
+          <div class="flip-card-front">
+            <h4>', mandarin, '</h4>
+            <hr>',
+            pinyin,'
+          </div>
+          <div class="flip-card-back">',
+          english,'
+          </div>
         </div>
       </div>
     ')
@@ -204,6 +207,10 @@ ui <- fluidPage(
          
          #dropdown-menu-settings_dropdown {
            box-shadow: 0 50px 100px rgba(50,50,93,.1),0 15px 35px rgba(50,50,93,.15),0 5px 15px rgba(0,0,0,.1);
+         }
+         
+         .btn-group {
+           margin-bottom: 4px;
          }
          
          .form-group {
@@ -289,26 +296,52 @@ ui <- fluidPage(
            font-size: 0.9rem;
          }
          
-         .card {
-           clear: both;
+         .flip-card {
+           width: 210px;
+           height: 150px;
+           perspective: 1000px;
+           margin-bottom: 20px;
+           -webkit-backface-visibility: hidden;
+           backface-visibility: hidden;
+           -moz-backface-visibility: hidden;
+         }
+        
+         .flip-card-inner {
+           border: 1px solid #ced4da;
+           border-radius: .25rem;
+           position: relative;
+           width: 100%;
+           height: 100%;
+           text-align: center;
+           transition: transform 0.9s;
+           transform-style: preserve-3d;
            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-           transition: 0.2s;
+         }
+         
+         .flip-card:hover .flip-card-inner {
+           transform: rotateY(180deg);
+         }
+        
+         .flip-card-front, .flip-card-back {
+           position: absolute;
+           width: 100%;
+           height: 100%;
+           transform: rotateX(0deg);
+           -webkit-backface-visibility: hidden;
+           backface-visibility: hidden;
+           -moz-backface-visibility: hidden;
+         }
+        
+         .flip-card-front {
            padding-left: 16px;
            padding-right: 16px;
-           margin-bottom: 20px;
          }
          
-         .card:hover {
-           box-shadow: 0 8px 16px 0 rgba(0,0,0,0.2);
-         }
-         
-         .card-container-bottom {
-           padding-bottom: 12px;
-         }
-         
-         div.card hr {
-           margin-top: 12px;
-           margin-bottom: 12px;
+         .flip-card-back {
+           transform: rotateY(180deg);
+           display: flex;
+           align-items: center;
+           justify-content: center;
          }
       ')
     )
@@ -1014,21 +1047,11 @@ server <- function(input, output, session) {
                                            )
                                          })
                            
-                           # add styling
-                           # html_cards$cellArgs <- list(
-                           #                          style =
-                           #                            paste0(
-                           #                              "width: auto;
-                           #                               height: auto;
-                           #                               margin: 20px;"
-                           #                            )
-                           #                        )
-                           
                            # now lay out cards left to right + top to bottom
                            do.call(shiny::flowLayout, html_cards)
     
                          })
-  
+
 }
 
 # run it
