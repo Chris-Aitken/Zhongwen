@@ -42,7 +42,7 @@ language_choices <- c("中文" = "mandarin",
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
   text_in %>%
-    gsub("\\(\\w+\\)", "", ., ignore.case = TRUE) %>%
+    gsub("\\s*\\([^\\)]+\\)", "", ., ignore.case = TRUE) %>%
     gsub("\\s{2,}", " ", .) %>%
     trimws()
 }
@@ -138,6 +138,24 @@ remove_catch_all_category <- function(elements, name) {
   elements[elements != name]
 }
 
+# function for inserting a lesson selector into ui
+insert_lesson_selector <- function(input_id) {
+  fluidRow(
+    column(
+      12,
+      pickerInput(
+        inputId = input_id,
+        div(icon("filter"), "Lessons to include"),
+        multiple = TRUE,
+        selected = "all",
+        options = list(`selected-text-format` = "count > 3"),
+        choices = lesson_choices
+      ),
+      align = "center"
+    )
+  )
+}
+
 # seq_along for df rows
 rows_along <- function(df) seq(nrow(df))
 
@@ -149,11 +167,11 @@ create_card <- function(mandarin, pinyin, english) {
         <div class="flip-card-inner">
           <div class="flip-card-front">
             <h4>', mandarin, '</h4>
-            <hr>',
-            pinyin,'
+            <hr>
+            ', pinyin, '
           </div>
-          <div class="flip-card-back">',
-          english,'
+          <div class="flip-card-back">
+            ', english, '
           </div>
         </div>
       </div>
@@ -259,6 +277,10 @@ ui <- fluidPage(
            align-self: start;
          }
          
+         .bootstrap-select .dropdown-toggle .filter-option {
+           text-align: center;
+         }
+         
          .header:hover {
            background-color: #eee;
          }
@@ -296,8 +318,15 @@ ui <- fluidPage(
            font-size: 0.9rem;
          }
          
+         .shiny-flow-layout > div {
+           display: inline-block;
+           vertical-align: top;
+           padding-right: 20px;
+           width: 300px;
+         }
+         
          .flip-card {
-           width: 210px;
+           width: auto;
            height: 150px;
            perspective: 1000px;
            margin-bottom: 20px;
@@ -411,7 +440,7 @@ ui <- fluidPage(
         p(
           paste0(
             "Learning Chinese can be challenging. This app provides a set of tools to help ",
-            "those learning the language. It is primarily geared towards students who are native English speakers, ",
+            "those starting with the language. It is primarily geared towards students who are native English speakers, ",
             "and it is intended to serve as a complement to the"
           ),
           em("Contemporary Chinese"), "book series by Sinolingua."
@@ -605,20 +634,7 @@ ui <- fluidPage(
       
       # selection of lessons to restrict vocab to
       br(),
-      fluidRow(
-        column(
-          12,
-          pickerInput(
-            "full_vocab_lessons_to_include",
-            div(icon("filter"), "Lessons to include"),
-            multiple = TRUE,
-            selected = "all",
-            options = list(`selected-text-format` = "count > 3"),
-            choices = lesson_choices
-          ),
-          align = "center"
-        )
-      ),
+      insert_lesson_selector(input_id = "full_vocab_lessons_to_include"),
       br(),
       
       # vocabulary in a table
@@ -631,6 +647,11 @@ ui <- fluidPage(
     tabPanel(
       "Key Phrases",
       value = "key_phrases",
+      
+      # selection of lessons to restrict vocab to
+      br(),
+      insert_lesson_selector(input_id = "phrases_lessons_to_include"),
+      br(),
       
       # display cards containing key phrases
       fluidRow(
@@ -649,6 +670,35 @@ ui <- fluidPage(
 
 # backend server logic
 server <- function(input, output, session) {
+  
+  # function for ensuring user lesson choices are sensible
+  adjust_lesson_selection <- function(selector_id, aggregate_cat = "all", update_func) {
+    
+    # if nothing selected
+    if (is.null(input[[selector_id]])) {
+      
+      # change to "all" category
+      update_func(
+        session = session,
+        inputId = selector_id,
+        selected = aggregate_cat
+      )
+      
+      # if "all" chosen alongside individual lessons
+    } else if (length(input[[selector_id]]) > 1 &&
+               "all" %in% input[[selector_id]]) {
+      
+      # remove "all" and retain individual lessons
+      # (doesn't make sense to include everything and a subset - prioritise subset)
+      update_func(
+        session = session,
+        inputId = selector_id,
+        selected = input[[selector_id]] %>%
+                     remove_catch_all_category(name = aggregate_cat)
+      )
+      
+    }
+  }
   
   # initialise empty df to add previously-served questions to
   previous_question_entries <- vocab %>% slice(0)
@@ -671,21 +721,14 @@ server <- function(input, output, session) {
   addClass(id = "page_nav_menu", class = "justify-content-end")
   
   # check that at least one lesson type selected by user; choose all if not
+  # remove all if some lessons selected as well
   observeEvent(
     input$settings_dropdown, {
-      if (is.null(input$test_lessons_to_include)) {
-        updateMultiInput(session = session, inputId = "test_lessons_to_include", selected = "all")
-      } else if (length(input$test_lessons_to_include) > 1 &&
-                 "all" %in% input$test_lessons_to_include) {
-        updateMultiInput(
-          session = session,
-          inputId = "test_lessons_to_include",
-          selected = input$test_lessons_to_include %>%
-                       remove_catch_all_category(name = "all")
-        )
-      }
-    }
-  )
+      adjust_lesson_selection(
+        "test_lessons_to_include",
+        update_func = updateMultiInput
+      )
+  })
   
   # ensure that user can't select response language as prompt language
   observeEvent(
@@ -925,21 +968,10 @@ server <- function(input, output, session) {
   observeEvent(
     input$full_vocab_lessons_to_include_open, {
       if (isFALSE(input$full_vocab_lessons_to_include_open)) {
-        if (is.null(input$full_vocab_lessons_to_include)) {
-          updatePickerInput(
-            session = session,
-            inputId = "full_vocab_lessons_to_include",
-            selected = "all"
-          )
-        } else if (length(input$full_vocab_lessons_to_include) > 1 && 
-                   "all" %in% input$full_vocab_lessons_to_include) {
-          updatePickerInput(
-            session = session,
-            inputId = "full_vocab_lessons_to_include",
-            selected = input$full_vocab_lessons_to_include %>%
-                         remove_catch_all_category(name = "all")
-          )
-        }
+        adjust_lesson_selection(
+          "full_vocab_lessons_to_include",
+          update_func = updatePickerInput
+        )
       }
     }
   )
@@ -1034,18 +1066,35 @@ server <- function(input, output, session) {
                           )
                         )
   
+  # and again, as above, check that at least one lesson type selected by user for phrase cards
+  observeEvent(
+    input$phrases_lessons_to_include_open, {
+      if (isFALSE(input$phrases_lessons_to_include_open)) {
+        adjust_lesson_selection(
+          "phrases_lessons_to_include",
+          update_func = updatePickerInput
+        )
+      }
+    }
+  )
+  
+  # create reactive to pull relevant phrases
+  get_phrases <- eventReactive(
+                   isFALSE(input$phrases_lessons_to_include_open), {
+                     phrases %>%
+                       filter(
+                         lesson %in% process_lesson_selection(
+                                       input$phrases_lessons_to_include
+                                     )
+                       ) %>%
+                       select(-lesson)
+                 })
+  
   # render cards showing key phrases
   output$phrase_cards <- renderUI({
                            
                            # make cards
-                           html_cards <- rows_along(phrases) %>%
-                                         map( ~ {
-                                           create_card(
-                                             mandarin = phrases$mandarin[.x],
-                                             pinyin = phrases$pinyin[.x],
-                                             english = phrases$english[.x]
-                                           )
-                                         })
+                           html_cards <- pmap(get_phrases(), create_card)
                            
                            # now lay out cards left to right + top to bottom
                            do.call(shiny::flowLayout, html_cards)
