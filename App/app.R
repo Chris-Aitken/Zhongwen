@@ -43,9 +43,9 @@ language_choices <- c("中文" = "mandarin",
 # content for steps for tracking progress long-term
 progress_tracking_steps <- tribble(
   ~step_num, ~title, ~detail,
-  1, "Step 1", "If returning, load file",
-  2, "Step 2", "Use the recall test",
-  3, "Step 3", "When done, save file"
+  1, "Upload Test Record", "If you have used the app previously, upload your test record",
+  2, "Use App", "Proceed to use the app, and the test in particular",
+  3, "Store Results", "When done, before closing the app, save your test record"
 )
 
 # function for removing explanatory notes from translations for evaluations
@@ -189,7 +189,7 @@ create_card <- function(mandarin, pinyin, english) {
 }
 
 # function for creating container for steps visual
-create_steps_container <- function(full_content, id) {
+enclose_in_steps_container <- function(full_content, id) {
   paste0('
     <ul id="', id,'" class="steps">
       ', full_content, '
@@ -218,8 +218,52 @@ create_step_item <- function(step_num, title, detail, marker_content = NULL) {
 create_steps_html <- function(step_data, id) {
   pmap(step_data, create_step_item) %>%
     paste0(collapse = "") %>%
-    create_steps_container(id = id) %>%
+    enclose_in_steps_container(id = id) %>%
     HTML()
+}
+
+# version of fileInput from shiny without progress bar and name reported
+simpleFileInput <- function (inputId, label,
+                             multiple = FALSE,
+                             accept = NULL,
+                             width = NULL, 
+                             buttonLabel = "Browse...",
+                             placeholder = "No file selected") {
+  
+  restoredValue <- shiny::restoreInput(id = inputId, default = NULL)
+  
+  if (!is.null(restoredValue) && !is.data.frame(restoredValue)) {
+    warning("Restored value for ", inputId, " has incorrect format.")
+    restoredValue <- NULL
+  }
+  
+  if (!is.null(restoredValue)) {
+    restoredValue <- jsonlite::toJSON(restoredValue, strict_atomic = FALSE)
+  }
+  
+  inputTag <- tags$input(
+    id = inputId,
+    name = inputId,
+    type = "file", 
+    style = "position: absolute !important; top: -99999px !important; left: -99999px !important;", 
+    `data-restore` = restoredValue
+  )
+  
+  if (multiple) {
+    inputTag$attribs$multiple <- "multiple"
+  }
+  
+  if (length(accept) > 0) {
+    inputTag$attribs$accept <- paste(accept, collapse = ",")
+  }
+  
+  div(class = "form-group", style = css(width = validateCssUnit(width)), 
+      shiny:::shinyInputLabel(inputId, label), div(class = "input-group", 
+                                                   tags$label(class = "input-group-btn", 
+                                                              span(class = "btn btn-default btn-file", buttonLabel, 
+                                                                   inputTag)))
+  )
+  
 }
 
 # user interface
@@ -260,6 +304,16 @@ ui <- fluidPage(
            font-family: "News Cycle","Arial Narrow Bold",sans-serif;
            font-weight: 700;
            line-height: 1.1;
+         }
+         
+         .home-content {
+           text-align: justify;
+           margin-left: -10px;
+           margin-right: -10px;
+         }
+         
+         #record_upload_button {
+           margin-bottom:4px;
          }
       
          .dropdown-toggle::after {
@@ -481,10 +535,14 @@ ui <- fluidPage(
          .steps .step-title {
            font-size: 1.2rem;
            font-weight: 600;
+           margin-top: 5px;
          }
          
          .steps .step-content {
            margin-top: -10px;
+           margin-right: auto;
+           margin-left: auto;
+           max-width: 70%;
          }
          
          ul {
@@ -546,53 +604,94 @@ ui <- fluidPage(
       "Home",
       value = "home",
       
+      # homepage top
+      fluidRow(
+        
+        # homepage title
+        column(
+          5,
+          offset = 1,
+          br(),
+          div(strong("A Revision Tool", id = "home_title_prefix"), "For"),
+          div(h1("Contemporary Chinese", id = "home_title_english"), p("For Beginners")),
+          h1("当代中文"),
+          tags$hr(style = "height:20px; visibility:hidden;")
+        ),
+        
+        # upload and download data buttons
+        column(
+          5,
+          br(),
+          div(
+            style = "display:inline-block;vertical-align:top;",
+            simpleFileInput(
+              "record_upload_button",
+              label = NULL,
+              buttonLabel = div(icon("file-upload"), "Upload Record"),
+              multiple = FALSE,
+              placeholder = NULL
+            )
+          ),
+          div(
+            style = "display:inline-block;vertical-align:top;",
+            downloadButton("record_download_button", label = " Download Record", icon = icon("file-download"))
+          ),
+          align = "right"
+        )
+        
+      ),
+      
       # homepage text
       column(
         10,
-        br(),
-        div(strong("A Revision Tool", id = "home_title_prefix"), "For"),
-        div(h1("Contemporary Chinese", id = "home_title_english"), p("For Beginners")),
-        h1("当代中文"),
-        tags$hr(style = "height:20px; visibility:hidden;"),
-        p(
-          paste0(
-            "Learning Chinese can be challenging. This app provides a set of tools to help ",
-            "those starting with the language. It is primarily geared towards students who are native English speakers, ",
-            "and it is intended to serve as a complement to the"
+        offset = 1,
+        div(
+          p(
+            paste0(
+              "Learning Chinese can be challenging. This app provides a set of tools to help ",
+              "those starting with the language. It is primarily geared towards students who are native English speakers, ",
+              "and it is intended to serve as a complement to the"
+            ),
+            em("Contemporary Chinese"),
+            "book series by Sinolingua."
           ),
-          em("Contemporary Chinese"), "book series by Sinolingua."
+          p(
+            paste0(
+              "The main feature of the app is a recall test, which allows students to evaluate and ",
+              "improve their command of the vocabulary introduced by the book. The parameters ",
+              "of the test can be adjusted freely, so that one can test their ability to recognise characters ",
+              "and pīnyīn, as well as respond appropriately with them."
+            )
+          ),
+          p(
+            paste0(
+              "Alongside that, the full vocabulary is provided separately to reference. It is ",
+              "searchable (in English, Pīnyīn and Chinese) and can be filtered by book chapter. Key phrases introduced by ",
+              "the book are also available."
+            )
+          ),
+          p(
+            paste0(
+              "Students' performance is tracked during a browsing session, but no data ",
+              "is retained when the session ends. If you would like to track your performance over time, ",
+              "please follow the process below:"
+            )
+          ),
+          class = "home-content"
         ),
-        p(
-          paste0(
-            "The main feature of the app is a recall test, which allows students to evaluate and ",
-            "improve their command of the vocabulary introduced by the book. The parameters ",
-            "of the test can be adjusted freely, so that one can test their ability to recognise characters ",
-            "and pīnyīn, as well as respond appropriately with them."
-          )
-        ),
-        p(
-          paste0(
-            "Alongside that, the full vocabulary is provided separately to reference. It is ",
-            "searchable (in English, Pīnyīn and Chinese) and can be filtered by book chapter. Key phrases introduced by ",
-            "the book are also available."
-          )
-        ),
-        p(
-          paste0(
-            "Students' performance is tracked during a browsing session, but no data ",
-            "is retained when the session ends."
-          )
-        )
+        align = "center"
       ),
       
       # create walkthrough for recording performance long-term
-      tags$hr(style = "height:25px; visibility:hidden;"),
+      tags$hr(style = "height:50px; visibility:hidden;"),
       column(
-        12,
+        10,
+        offset = 1,
         create_steps_html(
           progress_tracking_steps,
           id = "progress_tracking_steps"
-        )
+        ),
+        align = "center"
       ),
       tags$hr(style = "height:15px; visibility:hidden;")
     ),
@@ -787,7 +886,9 @@ ui <- fluidPage(
           uiOutput("phrase_cards"),
           align = "center"
         )
-      )
+      ),
+      br(),
+      br()
       
     )
   
