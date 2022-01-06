@@ -8,6 +8,7 @@ library(reactable)
 library(bslib)
 library(readxl)
 library(dplyr)
+library(tibble)
 library(tidyr)
 library(purrr)
 library(glue)
@@ -38,6 +39,14 @@ lesson_choices <- c("all", lesson_nums) %>%
 language_choices <- c("中文" = "mandarin",
                       "Pīnyīn" = "pinyin",
                       "English" = "english")
+
+# content for steps for tracking progress long-term
+progress_tracking_steps <- tribble(
+  ~step_num, ~title, ~detail,
+  1, "Step 1", "If returning, load file",
+  2, "Step 2", "Use the recall test",
+  3, "Step 3", "When done, save file"
+)
 
 # function for removing explanatory notes from translations for evaluations
 strip_notes <- function(text_in) {
@@ -177,6 +186,40 @@ create_card <- function(mandarin, pinyin, english) {
       </div>
     ')
   )
+}
+
+# function for creating container for steps visual
+create_steps_container <- function(full_content, id) {
+  paste0('
+    <ul id="', id,'" class="steps">
+      ', full_content, '
+    </ul>
+  ')
+}
+
+# function for creating
+create_step_item <- function(step_num, title, detail, marker_content = NULL) {
+  if (is.null(marker_content)) marker_content <- step_num
+  step_num <- step_num - 1
+  paste0('
+    <li class="step-item" step-id="', step_num,'">
+      <div class="step-marker">
+        ', marker_content,'
+      </div>
+      <div class="step-details">
+        <p class="step-title">', title, '</p>
+        <p class="step-content">', detail, '</p>
+      </div>
+    </li>
+  ')
+}
+
+# function for turning step item strings into one cohesive piece of html
+create_steps_html <- function(step_data, id) {
+  pmap(step_data, create_step_item) %>%
+    paste0(collapse = "") %>%
+    create_steps_container(id = id) %>%
+    HTML()
 }
 
 # user interface
@@ -372,6 +415,81 @@ ui <- fluidPage(
            align-items: center;
            justify-content: center;
          }
+         
+         .steps {
+           display: -webkit-box;
+           display: -ms-flexbox;
+           display: flex;
+           -ms-flex-wrap: wrap;
+           flex-wrap: wrap;
+           font-size: 1rem;
+           min-height: 2rem;
+         }
+         
+         .steps .step-item {
+           margin-top: 0;
+           position: relative;
+           -webkit-box-flex: 1;
+           -ms-flex-positive: 1;
+           flex-grow: 1;
+           -ms-flex-preferred-size: 0;
+           flex-basis: 0;
+         }
+         
+         .steps .step-marker {
+           height: 2rem;
+           width: 2rem;
+           position: absolute;
+           left: calc(50% - 1rem);
+           color: #fff;
+           background-color: #919191;
+           border-radius: 50%;
+           text-align: center;
+           line-height: 2rem;
+           z-index: 1;
+         }
+         
+         .steps .step-item:not(:first-child)::before {
+           height: .2em;
+           width: 100%;
+           bottom: 0;
+           left: -50%;
+           top: 1rem;
+           content: " ";
+           display: block;
+           position: absolute;
+         }
+         
+         .steps .step-item::before {
+           background: -webkit-gradient(linear,right top,left top,color-stop(50%,#dbdbdb),color-stop(50%,#00d1b2));
+           background: linear-gradient(to left,#dbdbdb 50%,#00d1b2 50%);
+           background-position-x: 0%;
+           background-position-y: 0%;
+           background-size: auto;
+           background-size: 200% 100%;
+           background-position: right bottom;
+         }
+         
+         .steps .step-details {
+           margin-top: 2rem;
+           margin-left: .5em;
+           margin-right: .5em;
+           padding-top: .2em;
+           text-align: center;
+         }
+         
+         .steps .step-title {
+           font-size: 1.2rem;
+           font-weight: 600;
+         }
+         
+         .steps .step-content {
+           margin-top: -10px;
+         }
+         
+         ul {
+           list-style: none;
+         }
       ')
     )
   ),
@@ -435,8 +553,7 @@ ui <- fluidPage(
         div(strong("A Revision Tool", id = "home_title_prefix"), "For"),
         div(h1("Contemporary Chinese", id = "home_title_english"), p("For Beginners")),
         h1("当代中文"),
-        br(),
-        tags$hr(style = "height:30px; visibility:hidden;"),
+        tags$hr(style = "height:20px; visibility:hidden;"),
         p(
           paste0(
             "Learning Chinese can be challenging. This app provides a set of tools to help ",
@@ -466,8 +583,18 @@ ui <- fluidPage(
             "is retained when the session ends."
           )
         )
-      )
+      ),
       
+      # create walkthrough for recording performance long-term
+      tags$hr(style = "height:25px; visibility:hidden;"),
+      column(
+        12,
+        create_steps_html(
+          progress_tracking_steps,
+          id = "progress_tracking_steps"
+        )
+      ),
+      tags$hr(style = "height:15px; visibility:hidden;")
     ),
     
     # test page
@@ -728,7 +855,8 @@ server <- function(input, output, session) {
         "test_lessons_to_include",
         update_func = updateMultiInput
       )
-  })
+    }
+  )
   
   # ensure that user can't select response language as prompt language
   observeEvent(
@@ -858,7 +986,7 @@ server <- function(input, output, session) {
       # code for handling feedback
       if (isTRUE(check_answer_correct())) {
         
-        # show priase if answer is okay (approx)
+        # show praise if answer is okay (approx)
         shinyalert(
           title = "Correct!",
           size = "xs", 
@@ -917,7 +1045,7 @@ server <- function(input, output, session) {
   observeEvent({
       show_score() | input$alert_correct_answer | input$alert_incorrect_answer
     }, {
-      if (input$submit_response >= 1 && show_score()) {
+      if (input$submit_response >= 1 & show_score()) {
         shinyjs::show("vocab_test_score_box", anim = TRUE, animType = "fade")
       } else {
         shinyjs::hide("vocab_test_score_box", anim = TRUE, animType = "fade")
@@ -942,7 +1070,7 @@ server <- function(input, output, session) {
     }
   )
   
-  # after feddback is displayed, move onto next question
+  # after feedback is displayed, move onto next question
   observeEvent({
       input$alert_correct_answer | input$alert_incorrect_answer
     }, {
@@ -1057,7 +1185,7 @@ server <- function(input, output, session) {
                                                 bar <- div(
                                                   class = paste0("bar-chart bar-chart-background-", chart_background_type),
                                                   style = list(marginRight = "6px"),
-                                                  div(class = "bar", style = list(width = width, backgroundColor = "#919191")) # "#dc7169"
+                                                  div(class = "bar", style = list(width = width, backgroundColor = "#919191"))
                                                 )
                                                 div(class = "bar-cell", span(class = "number", value), bar)
                                               }
