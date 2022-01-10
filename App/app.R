@@ -232,6 +232,29 @@ create_steps_html <- function(step_data, id) {
     HTML()
 }
 
+# function for adding html for font-awesome icon inside step marker
+steps_insert_icon_html <- function(icon) {
+  HTML(
+    paste0('
+      <i class="fa fa-', icon,'" role="presentation" aria-label="', icon,' icon">
+      </i>
+    ')
+  )
+}
+
+# function for changing step default styling to 'complete' styling
+make_step_style_complete <- function(step_id) {
+  marker_selector <- glue('li.step-item[step-id="{step_id}"] div.step-marker')
+  addClass(
+    selector = marker_selector,
+    class = "step-complete"
+  )
+  shinyjs::html(
+    selector = marker_selector,
+    html = steps_insert_icon_html("check")
+  )
+}
+
 # version of fileInput from shiny without progress bar and name reported
 simpleFileInput <- function (inputId, label,
                              multiple = FALSE,
@@ -327,7 +350,7 @@ ui <- fluidPage(
            margin-right: -10px;
          }
          
-         #record_upload_button {
+         #record_upload {
            margin-bottom:4px;
          }
       
@@ -519,7 +542,7 @@ ui <- fluidPage(
            position: absolute;
            left: calc(50% - 1rem);
            color: #fff;
-           background-color: #919191;
+           background-color: #b8b8b8;
            border-radius: 50%;
            text-align: center;
            line-height: 2rem;
@@ -567,6 +590,29 @@ ui <- fluidPage(
            margin-left: auto;
            max-width: 70%;
          }
+         
+         .step-complete {
+           background-color: #919191 !important;
+        	 transform: scale(1);
+        	 animation: pulse 3s;
+         }
+         
+         @keyframes pulse {
+        	 0% {
+        	 	 transform: scale(0.95);
+        		 box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7);
+        	 }
+        
+        	 70% {
+         		 transform: scale(1);
+         		 box-shadow: 0 0 0 10px rgba(0, 0, 0, 0);
+        	 }
+        
+        	 100% {
+        		 transform: scale(0.95);
+        		 box-shadow: 0 0 0 0 rgba(0, 0, 0, 0);
+        	 }
+        }
          
          ul {
            list-style: none;
@@ -658,10 +704,12 @@ ui <- fluidPage(
           ),
           div(
             style = "display:inline-block;vertical-align:top;",
-            downloadButton(
-              "record_download",
-              label = " Download Record",
-              icon = icon("file-download")
+            disabled(
+              downloadButton(
+                "record_download",
+                label = " Download Record",
+                icon = icon("file-download")
+              )
             )
           ),
           align = "right"
@@ -927,6 +975,9 @@ ui <- fluidPage(
 # backend server logic
 server <- function(input, output, session) {
   
+  # move navbar items to the right
+  addClass(id = "page_nav_menu", class = "justify-content-end")
+  
   # function for ensuring user lesson choices are sensible
   adjust_lesson_selection <- function(selector_id, aggregate_cat = "all", update_func) {
     
@@ -976,16 +1027,35 @@ server <- function(input, output, session) {
                                              was_correct = logical()
                                            )
   
-  # move navbar items to the right
-  addClass(id = "page_nav_menu", class = "justify-content-end")
+  # track a download counter (basically, increments when downloadButton pressed)
+  tracked_obs$download_counter <- 0
   
-  # replace response history with uploaded record if one provided
+  # get dimensions of window for selectively hiding elements on small screens, etc
+  get_window_dimensions <- reactive({
+                             tibble(
+                               width = input$dimension[1],
+                               height = input$dimension[2]
+                             )
+                           })
+  
+  # hide entire steps visual if screen too small to accomodate it
+  observeEvent(
+    get_window_dimensions(), {
+      if (get_window_dimensions()$width < 780) {
+        shinyjs::hide("progress_tracking_steps", anim = FALSE)
+      } else {
+        shinyjs::show("progress_tracking_steps", anim = FALSE)
+      }
+    },
+    ignoreInit = TRUE
+  )
+  
+  # replace response history with uploaded record if provided
   observeEvent(
     input$record_upload, {
       tracked_obs$question_response_history <- vroom(input$record_upload$datapath, delim = "\t")
     }
   )
-  
   
   # set up download handler
   output$record_download <- downloadHandler(
@@ -994,8 +1064,36 @@ server <- function(input, output, session) {
                               },
                               content = function(file) {
                                 vroom_write(tracked_obs$question_response_history, file)
+                                tracked_obs$download_counter <- tracked_obs$download_counter + 1
                               }
                             )
+  
+  # update first marker in steps visual when record uploaded (tick and colour)
+  # note step id is 1 less than value shown inside marker (i.e., marker 1 has id 0)
+  observeEvent(
+    input$record_upload, {
+      make_step_style_complete(step_id = "0")
+    }
+  )
+  
+  # update second marker in steps visual when at least one test question answered
+  # also enable download button at the same time
+  observeEvent(
+    input$submit_response, {
+      if (input$submit_response == 1) {
+        make_step_style_complete(step_id = "1")
+        enable("record_download")
+      }
+    }
+  )
+  
+  # finally, update third marker when user saves record to local comp
+  observeEvent(
+    tracked_obs$download_counter, {
+        make_step_style_complete(step_id = "2")
+    },
+    ignoreInit = TRUE
+  )
   
   # check that at least one lesson type selected by user; choose all if not
   # remove all if some lessons selected as well
@@ -1253,14 +1351,6 @@ server <- function(input, output, session) {
       }
     }
   )
-  
-  # get dimensions of window for below
-  get_window_dimensions <- reactive({
-                             tibble(
-                               width = input$dimension[1],
-                               height = input$dimension[2]
-                             )
-                           })
   
   # get lower margin height below table (min size, plus extra if on big screens)
   get_bottom_margin_size <- reactive({
