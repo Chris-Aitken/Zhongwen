@@ -744,7 +744,7 @@ ui <- fluidPage(
           p(
             paste0(
               "The main feature of the app is a recall test, which allows students to evaluate and ",
-              "improve their command of the vocabulary introduced by the book. The parameters ",
+              "improve their command of the vocabulary introduced by the textbook. The parameters ",
               "of the test can be adjusted freely, so that one can test their ability to recognise characters ",
               "and Pīnyīn, as well as respond appropriately with them."
             )
@@ -1038,6 +1038,10 @@ server <- function(input, output, session) {
   
   # track a download counter (basically, increments when downloadButton pressed)
   tracked_obs$download_counter <- 0
+  
+  # track number of times lesson selector for vocab table has closed
+  tracked_obs$vocab_tbl_selector_closed <- 0
+  tracked_obs$phrases_selector_closed <- 0
   
   # get dimensions of window for selectively hiding elements on small screens, etc
   get_window_dimensions <- reactive({
@@ -1361,12 +1365,24 @@ server <- function(input, output, session) {
     }
   )
   
-  # get lower margin height below table (min size, plus extra if on big screens)
+  # update counter for closing lesson selector upon interaction
+  observeEvent(
+    input$full_vocab_lessons_to_include_open, {
+      tracked_obs$vocab_tbl_selector_closed <- tracked_obs$vocab_tbl_selector_closed +
+                                                 as.numeric(
+                                                   isFALSE(
+                                                     input$full_vocab_lessons_to_include_open
+                                                   )
+                                                 )
+    }
+  )
+  
+  # get lower margin height below vocab table (min size, plus extra if on big screens)
   get_bottom_margin_size <- reactive({
                               min(0.15 * get_window_dimensions()$height, 150)
                             })
   
-  # declare size of row (height)
+  # declare height of a single row in vocab_table
   row_height <- 38
   
   # get table height (38 default height of row if not broken over several lines)
@@ -1377,12 +1393,14 @@ server <- function(input, output, session) {
                                 max(., row_height * 2)                    # ensure something is shown
                             })
   
+  
+  
   # get vocab table data
   get_vocab_table_data <- eventReactive({
                               input$page_nav_menu == "vocab_table"
-                              isFALSE(input$full_vocab_lessons_to_include_open)
+                              tracked_obs$vocab_tbl_selector_closed
                             }, {
-                              Waiter$new(id = "vocab_table", fadeout = 2000)$show()
+                              Waiter$new(id = "vocab_table", fadeout = 3000)$show()
                               vocab %>%
                                filter(
                                  lesson %in% process_lesson_selection(
@@ -1456,9 +1474,21 @@ server <- function(input, output, session) {
     }
   )
   
+  # again, update counter for closing lesson selector for phrases upon interaction
+  observeEvent(
+    input$phrases_lessons_to_include_open, {
+      tracked_obs$phrases_selector_closed <- tracked_obs$phrases_selector_closed +
+                                             as.numeric(
+                                               isFALSE(
+                                                 input$phrases_lessons_to_include_open
+                                               )
+                                             )
+    }
+  )
+  
   # create reactive to pull relevant phrases
   get_phrases <- eventReactive(
-                   isFALSE(input$phrases_lessons_to_include_open), {
+                   tracked_obs$phrases_selector_closed, {
                      phrases %>%
                        filter(
                          lesson %in% process_lesson_selection(
@@ -1466,7 +1496,7 @@ server <- function(input, output, session) {
                                      )
                        ) %>%
                        select(-lesson)
-                 })
+                })
   
   # render cards showing key phrases
   output$phrase_cards <- renderUI({
