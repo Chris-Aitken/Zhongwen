@@ -7,14 +7,17 @@ library(shinyjs)
 library(reactable)
 library(bslib)
 library(readxl)
+library(vroom)
 library(dplyr)
 library(tibble)
 library(tidyr)
 library(purrr)
 library(glue)
+library(stringr)
 library(lubridate)
 library(htmltools)
 library(shinycssloaders)
+library(jsonlite)
 
 # declare path to app files locally
 path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
@@ -54,6 +57,13 @@ strip_notes <- function(text_in) {
     gsub("\\s*\\([^\\)]+\\)", "", ., ignore.case = TRUE) %>%
     gsub("\\s{2,}", " ", .) %>%
     trimws()
+}
+
+# function for stripping away punctuation
+strip_punc <- function(text_in) {
+  text_in %>%
+    gsub("(?<=[A-z])\\p{Pd}(?=[A-z])", " ", ., perl = TRUE) %>%
+    gsub("[[:punct:]]", "", .)
 }
 
 # function for processing lesson selections
@@ -106,8 +116,8 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
 
 # function for checking strings of text match (approximately)
 check_equal <- function(expected, val_to_check) {
-  expected <- unlist(strsplit(expected, split = ","))
-  val_to_check <- gsub("[[:punct:]]", "", val_to_check)
+  expected <- unlist(strsplit(expected, split = ",")) %>% strip_punc()
+  val_to_check <- strip_punc(val_to_check)
   any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
 }
 
@@ -281,6 +291,11 @@ ui <- fluidPage(
            border-bottom: 1px solid rgba(0,0,0,0.3) !important;
          }
          
+         .navbar-toggle {
+           line-height: 0px;
+           border-width: 0px;
+         }
+         
          .navbar.navbar-default {
            border: none;
          }
@@ -318,6 +333,14 @@ ui <- fluidPage(
       
          .dropdown-toggle::after {
            display: none;
+         }
+         
+         #settings_dropdown {
+           line-height: 0px;
+         }
+         
+         .dropdown-menu {
+           margin: .75rem 0 0;
          }
          
          #dropdown-menu-settings_dropdown {
@@ -505,9 +528,9 @@ ui <- fluidPage(
          
          .steps .step-item:not(:first-child)::before {
            height: .2em;
-           width: 100%;
+           width: 80%;
            bottom: 0;
-           left: -50%;
+           left: -40%;
            top: 1rem;
            content: " ";
            display: block;
@@ -629,7 +652,8 @@ ui <- fluidPage(
               label = NULL,
               buttonLabel = div(icon("file-upload"), "Upload Record"),
               multiple = FALSE,
-              placeholder = NULL
+              placeholder = NULL,
+              accept = ".tsv"
             )
           ),
           div(
@@ -660,7 +684,7 @@ ui <- fluidPage(
               "The main feature of the app is a recall test, which allows students to evaluate and ",
               "improve their command of the vocabulary introduced by the book. The parameters ",
               "of the test can be adjusted freely, so that one can test their ability to recognise characters ",
-              "and pīnyīn, as well as respond appropriately with them."
+              "and Pīnyīn, as well as respond appropriately with them."
             )
           ),
           p(
@@ -683,7 +707,7 @@ ui <- fluidPage(
       ),
       
       # create walkthrough for recording performance long-term
-      tags$hr(style = "height:50px; visibility:hidden;"),
+      tags$hr(style = "height:30px; visibility:hidden;"),
       column(
         10,
         offset = 1,
@@ -864,8 +888,8 @@ ui <- fluidPage(
       br(),
       
       # vocabulary in a table
-      reactableOutput("vocab_table") %>%
-        withSpinner(type = 8, color = "#919191", size = 0.9)
+      reactableOutput("vocab_table") #%>%
+        #withSpinner(type = 8, color = "#919191", size = 0.9)
       
     ),
     
@@ -914,7 +938,7 @@ server <- function(input, output, session) {
       
       # if "all" chosen alongside individual lessons
     } else if (length(input[[selector_id]]) > 1 &&
-               "all" %in% input[[selector_id]]) {
+               aggregate_cat %in% input[[selector_id]]) {
       
       # remove "all" and retain individual lessons
       # (doesn't make sense to include everything and a subset - prioritise subset)
@@ -928,6 +952,9 @@ server <- function(input, output, session) {
     }
   }
   
+  # initialise reactive list to keep track of background variables that change
+  tracked_obs <- reactiveValues()
+  
   # initialise empty df to add previously-served questions to
   previous_question_entries <- vocab %>% slice(0)
   
@@ -936,17 +963,30 @@ server <- function(input, output, session) {
   question_number <- 0
   
   # initialise empty dataframe for storing question-response info (for result charts)
-  question_response_history <- tibble(
-                                 date_time = Date(),
-                                 entry_id = integer(),
-                                 prompt = character(),
-                                 correct_response = character(),
-                                 actual_response = character(),
-                                 was_correct = logical()
-                               )
+  tracked_obs$question_response_history <- tibble(
+                                             date_time = Date(),
+                                             entry_id = integer(),
+                                             prompt = character(),
+                                             correct_response = character(),
+                                             actual_response = character(),
+                                             was_correct = logical()
+                                           )
   
   # move navbar items to the right
   addClass(id = "page_nav_menu", class = "justify-content-end")
+  
+  # set up upload handler
+  
+  
+  # set up download handler
+  output$record_download_button <- downloadHandler(
+                                     filename = function() {
+                                       "contemporary_chinese_record.tsv"
+                                     },
+                                     content = function(file) {
+                                       vroom_write(tracked_obs$question_response_history, file)
+                                     }
+                                   )
   
   # check that at least one lesson type selected by user; choose all if not
   # remove all if some lessons selected as well
@@ -1157,17 +1197,17 @@ server <- function(input, output, session) {
   # capture record of question, response, correctness etc for vocab table
   observeEvent(
     input$submit_response, {
-      question_response_history <<- bind_rows(
-                                      question_response_history,
-                                      tibble(
-                                        date_time = now(),
-                                        entry_id = gen_test_question()$entry_id,
-                                        prompt = gen_test_question()$prompt,
-                                        correct_response = gen_test_question()$correct_response,
-                                        actual_response = input$vocab_test_input,
-                                        was_correct = isTRUE(check_answer_correct())
-                                      )
-                                    )
+      tracked_obs$question_response_history <- bind_rows(
+                                                tracked_obs$question_response_history,
+                                                tibble(
+                                                  date_time = now(),
+                                                  entry_id = gen_test_question()$entry_id,
+                                                  prompt = gen_test_question()$prompt,
+                                                  correct_response = gen_test_question()$correct_response,
+                                                  actual_response = input$vocab_test_input,
+                                                  was_correct = isTRUE(check_answer_correct())
+                                                )
+                                              )
     }
   )
   
@@ -1241,7 +1281,7 @@ server <- function(input, output, session) {
                                              )
                                ) %>%
                                left_join(
-                                 question_response_history %>%
+                                 tracked_obs$question_response_history %>%
                                    group_by(entry_id) %>%
                                    summarise(total = n(), correct = sum(was_correct)) %>%
                                    mutate(performance = paste0(correct, "/", total)) %>%
