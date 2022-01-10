@@ -16,7 +16,7 @@ library(glue)
 library(stringr)
 library(lubridate)
 library(htmltools)
-library(shinycssloaders)
+library(waiter)
 library(jsonlite)
 
 # declare path to app files locally
@@ -298,6 +298,9 @@ simpleFileInput <- function (inputId, label,
   )
   
 }
+
+# set theme for loading spinners
+waiter_set_theme(html = spin_5(), color = transparent(0.4))
 
 # user interface
 ui <- fluidPage(
@@ -617,6 +620,11 @@ ui <- fluidPage(
          ul {
            list-style: none;
          }
+         
+         .boxxy .spinner--5 {
+           border: 2px solid rgb(220,112,105);
+           animation: spinner5 800ms linear infinite;
+         }
       ')
     )
   ),
@@ -661,6 +669,8 @@ ui <- fluidPage(
   
   # set up necessary additional details
   useShinyjs(),
+  useWaiter(),
+  waiterPreloader(html = spin_5(), color = "#fff", fadeout = 3000),
   
   # create multi-page structure
   navbarPage(
@@ -940,8 +950,7 @@ ui <- fluidPage(
       br(),
       
       # vocabulary in a table
-      reactableOutput("vocab_table") #%>%
-        #withSpinner(type = 8, color = "#919191", size = 0.9)
+      reactableOutput("vocab_table")
       
     ),
     
@@ -1373,6 +1382,7 @@ server <- function(input, output, session) {
                               input$page_nav_menu == "vocab_table"
                               isFALSE(input$full_vocab_lessons_to_include_open)
                             }, {
+                              Waiter$new(id = "vocab_table", fadeout = 2000)$show()
                               vocab %>%
                                filter(
                                  lesson %in% process_lesson_selection(
