@@ -648,7 +648,7 @@ ui <- fluidPage(
           div(
             style = "display:inline-block;vertical-align:top;",
             simpleFileInput(
-              "record_upload_button",
+              "record_upload",
               label = NULL,
               buttonLabel = div(icon("file-upload"), "Upload Record"),
               multiple = FALSE,
@@ -658,7 +658,11 @@ ui <- fluidPage(
           ),
           div(
             style = "display:inline-block;vertical-align:top;",
-            downloadButton("record_download_button", label = " Download Record", icon = icon("file-download"))
+            downloadButton(
+              "record_download",
+              label = " Download Record",
+              icon = icon("file-download")
+            )
           ),
           align = "right"
         )
@@ -975,18 +979,23 @@ server <- function(input, output, session) {
   # move navbar items to the right
   addClass(id = "page_nav_menu", class = "justify-content-end")
   
-  # set up upload handler
+  # replace response history with uploaded record if one provided
+  observeEvent(
+    input$record_upload, {
+      tracked_obs$question_response_history <- vroom(input$record_upload$datapath, delim = "\t")
+    }
+  )
   
   
   # set up download handler
-  output$record_download_button <- downloadHandler(
-                                     filename = function() {
-                                       "contemporary_chinese_record.tsv"
-                                     },
-                                     content = function(file) {
-                                       vroom_write(tracked_obs$question_response_history, file)
-                                     }
-                                   )
+  output$record_download <- downloadHandler(
+                              filename = function() {
+                                "contemporary_chinese_record.tsv"
+                              },
+                              content = function(file) {
+                                vroom_write(tracked_obs$question_response_history, file)
+                              }
+                            )
   
   # check that at least one lesson type selected by user; choose all if not
   # remove all if some lessons selected as well
