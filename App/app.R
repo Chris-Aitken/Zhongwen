@@ -312,6 +312,10 @@ ui <- fluidPage(
   tags$head(
     tags$style(
       HTML('
+         div.container-fluid {
+           max-width: 1400px;
+         }
+      
          .navbar {
            padding: 0.5rem 0rem;
            border-bottom: 1px solid rgba(0,0,0,0.3) !important;
@@ -1030,6 +1034,10 @@ server <- function(input, output, session) {
   tracked_obs$question_response_history <- tibble(
                                              date_time = Date(),
                                              entry_id = integer(),
+                                             prompt_type = character(),
+                                             response_type = character(),
+                                             sampling_type = character(),
+                                             test_lesson_selection = character(),
                                              prompt = character(),
                                              correct_response = character(),
                                              actual_response = character(),
@@ -1322,6 +1330,10 @@ server <- function(input, output, session) {
                                                 tibble(
                                                   date_time = now(),
                                                   entry_id = gen_test_question()$entry_id,
+                                                  prompt_type = input$prompt_type,
+                                                  response_type = input$response_type,
+                                                  sampling_type = input$sampling_type,
+                                                  test_lesson_selection = paste0(input$test_lessons_to_include, collapse = ", "),
                                                   prompt = gen_test_question()$prompt,
                                                   correct_response = gen_test_question()$correct_response,
                                                   actual_response = input$vocab_test_input,
