@@ -313,12 +313,12 @@ ui <- fluidPage(
     tags$style(
       HTML('
          div.container-fluid {
-           max-width: 1400px;
+           max-width: 1300px;
          }
       
          .navbar {
            padding: 0.5rem 0rem;
-           border-bottom: 1px solid rgba(0,0,0,0.3) !important;
+           border-bottom: 1px solid rgba(0, 0, 0, 0.3) !important;
          }
          
          .navbar-toggle {
@@ -336,7 +336,7 @@ ui <- fluidPage(
          }
          
          .navbar-light .navbar-toggler, .navbar-light .navbar-toggle, .navbar.navbar-default .navbar-toggler, .navbar.navbar-default .navbar-toggle {
-           border-color: rgba(0,0,0,0.2);
+           border-color: rgba(0, 0, 0, 0.2);
          }
          
          #home_title_prefix {
@@ -360,13 +360,13 @@ ui <- fluidPage(
          #record_upload {
            margin-bottom:4px;
          }
-      
-         .dropdown-toggle::after {
-           display: none;
+         
+         .dropdown-toggle {
+           line-height: 0px;
          }
          
-         #settings_dropdown {
-           line-height: 0px;
+         .dropdown-toggle::after {
+           display: none;
          }
          
          .dropdown-menu {
@@ -374,7 +374,7 @@ ui <- fluidPage(
          }
          
          #dropdown-menu-settings_dropdown {
-           box-shadow: 0 50px 100px rgba(50,50,93,.1),0 15px 35px rgba(50,50,93,.15),0 5px 15px rgba(0,0,0,.1);
+           box-shadow: 0 50px 100px rgba(50, 50, 93, 0.1),0 15px 35px rgba(50, 50, 93, 0.15),0 5px 15px rgba(0, 0, 0, 0.1);
          }
          
          .btn-group {
@@ -399,27 +399,27 @@ ui <- fluidPage(
          }
          
          button.confirm {
-           background-color: rgb(220,112,105) !important;
+           background-color: rgb(220, 112, 105) !important;
          }
          
          .sweet-alert .sa-icon.sa-success {
-           border-color: rgb(220,112,105) !important;
+           border-color: rgb(220, 112, 105) !important;
          }
          
          .sweet-alert .sa-icon.sa-success .sa-line {
-           background-color: rgb(220,112,105) !important;
+           background-color: rgb(220, 112, 105) !important;
          }
          
          .sweet-alert .sa-icon.sa-success .sa-placeholder {
-           border: 4px solid rgba(220,112,105,.4) !important;
+           border: 4px solid rgba(220, 112, 105, 0.4) !important;
          }
          
          .sweet-alert .sa-icon.sa-error {
-           border-color: rgba(220,112,105,.4) !important;
+           border-color: rgba(220, 112, 105, 0.4) !important;
          }
          
          .sweet-alert .sa-icon.sa-error .sa-line {
-           background-color: rgb(220,112,105) !important;
+           background-color: rgb(220, 112, 105) !important;
          }
          
          .rt-search {
@@ -494,7 +494,7 @@ ui <- fluidPage(
            text-align: center;
            transition: transform 0.9s;
            transform-style: preserve-3d;
-           box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+           box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2);
          }
          
          .flip-card:hover .flip-card-inner {
@@ -568,8 +568,8 @@ ui <- fluidPage(
          }
          
          .steps .step-item::before {
-           background: -webkit-gradient(linear,right top,left top,color-stop(50%,#dbdbdb),color-stop(50%,#00d1b2));
-           background: linear-gradient(to left,#dbdbdb 50%,#00d1b2 50%);
+           background: -webkit-gradient(linear, right top, left top, color-stop(50%, #dbdbdb), color-stop(50%, #00d1b2));
+           background: linear-gradient(to left, #dbdbdb 50%, #00d1b2 50%);
            background-position-x: 0%;
            background-position-y: 0%;
            background-size: auto;
@@ -626,7 +626,7 @@ ui <- fluidPage(
          }
          
          .boxxy .spinner--5 {
-           border: 2px solid rgb(220,112,105);
+           border: 2px solid rgb(220, 112, 105);
            animation: spinner5 800ms linear infinite;
          }
       ')
@@ -638,14 +638,14 @@ ui <- fluidPage(
     tags$script('
         var dimension = [0, 0];
         $(document).on("shiny:connected", function(e) {
-            dimension[0] = window.innerWidth;
-            dimension[1] = window.innerHeight;
-            Shiny.onInputChange("dimension", dimension);
+          dimension[0] = window.innerWidth;
+          dimension[1] = window.innerHeight;
+          Shiny.onInputChange("dimension", dimension);
         });
         $(window).resize(function(e) {
-            dimension[0] = window.innerWidth;
-            dimension[1] = window.innerHeight;
-            Shiny.onInputChange("dimension", dimension);
+          dimension[0] = window.innerWidth;
+          dimension[1] = window.innerHeight;
+          Shiny.onInputChange("dimension", dimension);
         });
     ')
   ),
@@ -668,6 +668,20 @@ ui <- fluidPage(
             }
           );
         });
+    ')
+  ),
+  
+  # and a final one to count the number of times dropdown button opens _and_ closes
+  # input$'button_id' only gives num times opened
+  tags$head(
+    tags$script('
+      $(document).ready(function() {
+        var n = 0;
+        $("#settings_dropdown_state").on("hide.bs.dropdown", function() {
+          n++;
+          Shiny.onInputChange("settings_dropdown_count", n);
+        });
+      });
     ')
   ),
   
@@ -788,7 +802,7 @@ ui <- fluidPage(
     
     # test page
     tabPanel(
-      "Test Vocabulary Recall",
+      "Recall Test",
       value = "vocab_test",
   
       # add some vertical space
@@ -878,6 +892,17 @@ ui <- fluidPage(
             justified = TRUE,
             choices = language_choices
           )
+        ),
+        
+        # help dropdown
+        column(
+          1,
+          br(),
+          dropdownButton(
+            icon = icon("question"),
+            p("test")
+          ),
+          offset = 1
         )
         
       # close off options
@@ -1111,15 +1136,16 @@ server <- function(input, output, session) {
   # finally, update third marker when user saves record to local comp
   observeEvent(
     tracked_obs$download_counter, {
-        make_step_style_complete(step_id = "2")
+      make_step_style_complete(step_id = "2")
     },
     ignoreInit = TRUE
   )
   
   # check that at least one lesson type selected by user; choose all if not
   # remove all if some lessons selected as well
+  # settings_dropdown_count reported to R from JS function
   observeEvent(
-    input$settings_dropdown, {
+    input$settings_dropdown_count, {
       adjust_lesson_selection(
         "test_lessons_to_include",
         update_func = updateMultiInput
@@ -1412,7 +1438,7 @@ server <- function(input, output, session) {
                               input$page_nav_menu == "vocab_table"
                               tracked_obs$vocab_tbl_selector_closed
                             }, {
-                              Waiter$new(id = "vocab_table", fadeout = 3000)$show()
+                              Waiter$new(id = "vocab_table", fadeout = 2000)$show()
                               vocab %>%
                                filter(
                                  lesson %in% process_lesson_selection(
