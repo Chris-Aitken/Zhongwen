@@ -361,8 +361,12 @@ ui <- fluidPage(
            margin-bottom:4px;
          }
          
-         .dropdown-toggle {
-           line-height: 0px;
+         .btn.btn-circle {
+           line-height: 1px;
+           font-size: 18px;
+           border-radius: 50%;
+           height: 45px;
+           width: 45px;
          }
          
          .dropdown-toggle::after {
@@ -373,8 +377,17 @@ ui <- fluidPage(
            margin: .75rem 0 0;
          }
          
-         #dropdown-menu-settings_dropdown {
+         .dropdown-shinyWidgets {
            box-shadow: 0 50px 100px rgba(50, 50, 93, 0.1),0 15px 35px rgba(50, 50, 93, 0.15),0 5px 15px rgba(0, 0, 0, 0.1);
+         }
+         
+         #dropdown-menu-instructions_dropdown {
+           width: 300px;
+           height: 600px;
+           overflow-y: scroll;
+           padding-left: 15px;
+           padding-right: 15px;
+           text-align: justify;
          }
          
          .btn-group {
@@ -599,7 +612,7 @@ ui <- fluidPage(
          }
          
          .step-complete {
-           background-color: #919191 !important;
+           background-color: rgb(220, 112, 105) !important;
         	 transform: scale(1);
         	 animation: pulse 3s;
          }
@@ -671,8 +684,10 @@ ui <- fluidPage(
     ')
   ),
   
-  # and a final one to count the number of times dropdown button opens _and_ closes
+  # and a final one to count the number of times specific dropdown has closed
   # input$'button_id' only gives num times opened
+  # reports result for settings for test
+  # #settings_dropdown_state is parent of #settings_dropdown
   tags$head(
     tags$script('
       $(document).ready(function() {
@@ -860,7 +875,7 @@ ui <- fluidPage(
               ),
               
               # options for styling of dropdown
-              tooltip = tooltipOptions(title = "Additional options"),
+              tooltip = tooltipOptions(title = "Additional settings"),
               icon = icon("cog"),
               width = "300px"
               
@@ -897,12 +912,62 @@ ui <- fluidPage(
         # help dropdown
         column(
           1,
+          offset = 1,
           br(),
-          dropdownButton(
-            icon = icon("question"),
-            p("test")
-          ),
-          offset = 1
+          
+            # instrcutions dropdown
+            dropdownButton(
+              
+              # id
+              inputId = "instructions_dropdown",
+              
+              # title
+              h2("Instructions"),
+              br(),
+              
+              # basic info
+              p(
+                paste0(
+                  "The test presents elements of the vocabulary in ",
+                  "the chosen 'prompt' language, and expects a ",
+                  "response (a translation or transliteration) in ",
+                  "the 'response' langauge."
+                )
+              ),
+              hr(),
+              p(
+                paste0(
+                  "The prompt and response languages can be set ",
+                  "using the buttons above the prompt. Note that ",
+                  "the prompt and response languages cannot be the same."
+                )
+              ),
+              hr(),
+              p(
+                paste0(
+                  "The prompts are chosen randomly from the vocabulary. ",
+                  "By default, prompts are drawn from the entire vocabulary. ",
+                  "That can be narrowed to a selection of lessons in the settings dropdown."
+                )
+              ),
+              hr(),
+              p(
+                paste0(
+                  "After a question is finished, the element shown is returned ",
+                  "to the deck, such that it can be shown again. To prevent it from ",
+                  "being shown again in the current session, click 'remove word' in ",
+                  "the settings dropdown."
+                )
+              ),
+              
+              # options for dropdown
+              icon = icon("info"),
+              tooltip = TRUE,
+              label = "Instructions",
+              right = TRUE
+              
+            )
+          
         )
         
       # close off options
@@ -952,7 +1017,7 @@ ui <- fluidPage(
           hidden(
             div(
               id = "vocab_test_score_box",
-              "Score: ",
+              "Session score: ",
               textOutput("score", inline = TRUE) %>% 
                 tagAppendAttributes(class = "number")
             )
