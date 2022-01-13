@@ -14,6 +14,7 @@ library(tidyr)
 library(purrr)
 library(glue)
 library(stringr)
+library(stringi)
 library(lubridate)
 library(htmltools)
 library(waiter)
@@ -63,7 +64,8 @@ strip_notes <- function(text_in) {
 strip_punc <- function(text_in) {
   text_in %>%
     gsub("(?<=[A-z])\\p{Pd}(?=[A-z])", " ", ., perl = TRUE) %>%
-    gsub("[[:punct:]]", "", .)
+    gsub("[[:punct:]]", "", .) %>%
+    trimws()
 }
 
 # function for processing lesson selections
@@ -115,10 +117,17 @@ get_random_entry <- function(df, prompt_col, response_col, lesson_selection, sam
 }
 
 # function for checking strings of text match (approximately)
+# see https://stringi.gagolewski.com/weave/collation.html?highlight=strength
 check_equal <- function(expected, val_to_check) {
   expected <- unlist(strsplit(expected, split = ",")) %>% strip_punc()
   val_to_check <- strip_punc(val_to_check)
-  any(grepl(glue("^( )*{val_to_check}( )*$"), expected, ignore.case = TRUE))
+  any(
+    stri_cmp_equiv( # checks 'canonical' equivalence
+      val_to_check,
+      expected,
+      strength = 2 # allows for case to be different, but not tone marks
+    )
+  )
 }
 
 # function for turning off/on individual radio button inputs
@@ -155,6 +164,22 @@ round_to <- function(num, multiple_of) {
 # function for removing catch-all category if multiple present
 remove_catch_all_category <- function(elements, name) {
   elements[elements != name]
+}
+
+# function for turning numbers into tones for pinyin tool (e.g., ma1 to mā)
+convert_nums_to_tones <- function(text_in) {
+  
+  tone_unicode <- c(
+    "1" = "\u0304",
+    "2" = "\u0301",
+    "3" = "\u030c",
+    "4" = "\u0300",
+    "u5" = "\u00fc"
+  )
+  
+  text_in %>%
+    str_replace_all(tone_unicode)
+    
 }
 
 # function for inserting a lesson selector into ui
@@ -335,7 +360,10 @@ ui <- fluidPage(
            padding-right: 10px;
          }
          
-         .navbar-light .navbar-toggler, .navbar-light .navbar-toggle, .navbar.navbar-default .navbar-toggler, .navbar.navbar-default .navbar-toggle {
+         .navbar-light .navbar-toggler,
+         .navbar-light .navbar-toggle,
+         .navbar.navbar-default .navbar-toggler,
+         .navbar.navbar-default .navbar-toggle {
            border-color: rgba(0, 0, 0, 0.2);
          }
          
@@ -369,12 +397,13 @@ ui <- fluidPage(
            width: 45px;
          }
          
+         .dropup .dropdown-toggle::after,
          .dropdown-toggle::after {
            display: none;
          }
          
          .dropdown-menu {
-           margin: .75rem 0 0;
+           margin-top: .75rem;
          }
          
          .dropdown-shinyWidgets {
@@ -388,6 +417,33 @@ ui <- fluidPage(
            padding-left: 15px;
            padding-right: 15px;
            text-align: justify;
+         }
+         
+         #pinyin_dropdown_tool {
+           background-color: #aaaaaa;
+         }
+         
+         #dropdown-menu-pinyin_dropdown_tool {
+           margin-bottom: 1rem;
+           width: 320px;
+         }
+         
+         .icon-space-right {
+           margin-right: 5px;
+         }
+         
+         #test-bottom {
+           position: absolute !important;
+           bottom: 5% !important;
+         }
+         
+         #container_tones_tool_text_output {
+           width: 245px;
+           height: calc(1.5em + .75rem + 2px);
+           border: 1px solid #ced4da;
+           border-radius: .25rem;
+           padding-left: 15px;
+           padding-top: 5px;
          }
          
          .btn-group {
@@ -735,7 +791,7 @@ ui <- fluidPage(
           5,
           br(),
           div(
-            style = "display:inline-block;vertical-align:top;",
+            style = "display:inline-block; vertical-align:top;",
             simpleFileInput(
               "record_upload",
               label = NULL,
@@ -746,7 +802,7 @@ ui <- fluidPage(
             )
           ),
           div(
-            style = "display:inline-block;vertical-align:top;",
+            style = "display:inline-block; vertical-align:top;",
             disabled(
               downloadButton(
                 "record_download",
@@ -876,7 +932,7 @@ ui <- fluidPage(
               
               # options for styling of dropdown
               tooltip = tooltipOptions(title = "Additional settings"),
-              icon = icon("cog"),
+              icon = icon("sliders-h"),
               width = "300px"
               
           )
@@ -1028,7 +1084,60 @@ ui <- fluidPage(
       
       # add vertical whitespace
       br(),
-      br()
+      br(),
+      
+      # add pinyin tones tool
+      fluidRow(
+        id = "test-bottom",
+        column(
+          1,
+          dropdownButton(
+            
+            # id
+            inputId = "pinyin_dropdown_tool",
+            
+            # content
+            fluidRow(
+              column(
+                12,
+                textInput(
+                  "tones_tool_text_input",
+                  label = NULL,
+                  placeholder = "Enter text to add tones to"
+                ),
+                hr()
+              )
+            ),
+            fluidRow(
+              column(
+                12,
+                div(
+                  id = "container_tones_tool_text_output",
+                  style = "display:inline-block; vertical-align:top;",
+                  textOutput("tones_tool_text_output")
+                ),
+                div(
+                  id = "container_tones_tool_copy_output",
+                  style = "display:inline-block; vertical-align:top;",
+                  actionButton(
+                    "tones_tool_copy_output",
+                    label = NULL,
+                    icon = icon("copy"),
+                  )
+                )
+              )
+            ),
+            
+            # options
+            circle = FALSE,
+            label = "Tones Tool",
+            icon = icon("keyboard", class = "icon-space-right"),
+            up = TRUE,
+            tooltip = "Tool for typing Pīnyīn tones"
+            
+          )
+        )
+      )
     
     # close off test page
     ),
@@ -1442,7 +1551,7 @@ server <- function(input, output, session) {
     }
   )
   
-  # clear test prompt box + feedback if new question generated or other settings change
+  # clear test response box + feedback if new question generated or other settings change
   observeEvent({
       input$get_new_question
       input$prompt_type
@@ -1451,6 +1560,27 @@ server <- function(input, output, session) {
       input$test_lessons_to_include
     }, {
       updateTextInput(inputId = "vocab_test_input", label = NULL, value = "")
+    }
+  )
+  
+  # programmatically change numbers to tones in tone tool
+  get_tool_input_with_tones <- reactive({
+                                 req(input$tones_tool_text_input)
+                                 input$tones_tool_text_input %>%
+                                   convert_nums_to_tones()
+                               })
+  
+  # send that out to box below, for copying over
+  output$tones_tool_text_output <- renderText(get_tool_input_with_tones())
+  
+  # on click of button to copy input with tones, send to text input of test
+  observeEvent(
+    input$tones_tool_copy_output, {
+      updateTextInput(
+        inputId = "vocab_test_input",
+        label = NULL,
+        value = get_tool_input_with_tones()
+      )
     }
   )
   
