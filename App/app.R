@@ -324,6 +324,9 @@ simpleFileInput <- function (inputId, label,
   
 }
 
+# load plotting functions
+source(glue("{path_to_project}/App/plot_use_intensity_calendar.R"))
+
 # set theme for loading spinners
 waiter_set_theme(html = spin_5(), color = transparent(0.4))
 
@@ -1178,6 +1181,31 @@ ui <- fluidPage(
       br(),
       br()
       
+    ),
+    
+    # new page for further use + performance metrics
+    tabPanel(
+      "Metrics",
+      value = "metrics",
+      
+      # start with calendar
+      br(),
+      fluidRow(
+        column(
+          10,
+          div(
+            id = "calendar_container",
+            plotOutput(
+              "usage_intensity_calendar",
+              #hover = hoverOpts(id = "hover_calendar", delay = 0),
+              width = 777,
+              height = 200
+            )
+          ),
+          offset = 1
+        )
+      )
+      
     )
   
   )
@@ -1510,7 +1538,7 @@ server <- function(input, output, session) {
   # convert radio input to logical var for below
   show_score <- reactive(as.logical(input$show_score_choice))
   
-  # hide or unhide score
+  # hide or unhide score (contingent on user choice and at least one question done)
   observeEvent({
       show_score() | input$alert_correct_answer | input$alert_incorrect_answer
     }, {
@@ -1522,7 +1550,7 @@ server <- function(input, output, session) {
     }
   )
   
-  # capture record of question, response, correctness etc for vocab table
+  # capture record of question, response, correctness etc for vocab table etc
   observeEvent(
     input$submit_response, {
       tracked_obs$question_response_history <- bind_rows(
@@ -1602,11 +1630,7 @@ server <- function(input, output, session) {
   observeEvent(
     input$full_vocab_lessons_to_include_open, {
       tracked_obs$vocab_tbl_selector_closed <- tracked_obs$vocab_tbl_selector_closed +
-                                                 as.numeric(
-                                                   isFALSE(
-                                                     input$full_vocab_lessons_to_include_open
-                                                   )
-                                                 )
+                                                 as.numeric(isFALSE(input$full_vocab_lessons_to_include_open))
     }
   )
   
@@ -1711,11 +1735,7 @@ server <- function(input, output, session) {
   observeEvent(
     input$phrases_lessons_to_include_open, {
       tracked_obs$phrases_selector_closed <- tracked_obs$phrases_selector_closed +
-                                             as.numeric(
-                                               isFALSE(
-                                                 input$phrases_lessons_to_include_open
-                                               )
-                                             )
+                                             as.numeric(isFALSE(input$phrases_lessons_to_include_open))
     }
   )
   
@@ -1729,7 +1749,7 @@ server <- function(input, output, session) {
                                      )
                        ) %>%
                        select(-lesson)
-                })
+                 })
   
   # render cards showing key phrases
   output$phrase_cards <- renderUI({
@@ -1741,6 +1761,14 @@ server <- function(input, output, session) {
                            do.call(shiny::flowLayout, html_cards)
     
                          })
+  
+  # render plot showing num questions answered by calendar date
+  output$usage_intensity_calendar <- renderPlot({
+                                       plot_usage_calendar(
+                                         tracked_obs$question_response_history,
+                                         months = 6
+                                       )
+                                     })
 
 }
 
