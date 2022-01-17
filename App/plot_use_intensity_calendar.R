@@ -128,17 +128,19 @@ plot_usage_calendar <- function(df, months_to_plot = 6) {
                   axis.ticks = element_blank(),
                   strip.background = element_blank(),
                   strip.text = element_text(hjust = 1.025),
+                  text = element_text(size = 16),
                   legend.position = "bottom",
                   legend.direction = "horizontal",
-                  legend.justification = c(0.985,0),
-                  legend.key.size = unit(10.5, "pt"),
-                  legend.spacing.x = unit(0.9, "pt"),
-                  legend.margin = margin(-5, 0, 0, 0)
+                  legend.justification = c(0.9925,0),
+                  legend.key.size = unit(14, "pt"),
+                  legend.spacing.x = unit(1, "pt"),
+                  legend.margin = margin(-5, 0, 0, 0),
+                  legend.text = element_text(size = 13)
                 )
   
   # prevent clipping to enable annotation outside of plot - width = 8.1 in & height = 2.35 in
   ggdraw(usage_plot) + 
-    draw_label("Fewer", 0.791, 0.178, size = 9)
+    draw_label("Fewer", 0.8, 0.1525, size = 13)
 
 }
 

@@ -324,6 +324,40 @@ simpleFileInput <- function (inputId, label,
   
 }
 
+# create card for displaying plots
+create_plot_card <- function(bootstrap_width,
+                             bootstrap_offset = 0, # 0-12
+                             plot_id,              # shiny inputId
+                             plot_width,           # pixels
+                             plot_height,          # pixels
+                             card_title,
+                             card_footer = NULL,
+                             ...) {
+  
+  fluidRow(
+    column(
+      bootstrap_width,
+      offset = bootstrap_offset,
+      div(
+        id = paste0(plot_id, "_container"),
+        class = "plot_card_container",
+        h5(card_title),
+        tags$hr(class = "plot_card_divider"),
+        plotOutput(
+          outputId = plot_id,
+          width = plot_width,
+          height = plot_height,
+          ...
+        ),
+        tags$hr(class = "plot_card_spacer"),
+        card_footer
+      ),
+      align = "center"
+    )
+  )
+  
+}
+
 # load plotting functions
 source(glue("{path_to_project}/App/plot_use_intensity_calendar.R"))
 
@@ -700,6 +734,48 @@ ui <- fluidPage(
          .boxxy .spinner--5 {
            border: 2px solid rgb(220, 112, 105);
            animation: spinner5 800ms linear infinite;
+         }
+         
+         .plot_card_container {
+           border: 1pt solid rgba(0,0,0,0.2);
+           width: 630pt;
+           height: auto;
+           border-radius: 10pt;
+         }
+         
+         div.plot_card_container h5 {
+           font-size: 1.05rem;
+         }
+         
+         .plot_card_expand_button_container {
+           height: 0px;
+         }
+         
+         div.plot_card_container button {
+           border-radius: 50%;
+           height: 40px;
+           width: 40px;
+           transform: translate(30px,-20px);
+           background-color: #fff !important;
+           border: 1px solid rgba(0,0,0,0.2);
+           display: block;
+           padding: 0px;
+         }
+         
+         div.plot_card_container i {
+           color: rgba(0,0,0,0.4);
+           font-weight: 600;
+         }
+         
+         .plot_card_divider {
+           margin-top: 12pt;
+           margin-bottom: 10pt;
+         }
+         
+         .plot_card_spacer {
+           margin-top: 0pt;
+           margin-bottom: 10px;
+           visibility: hidden;
          }
       ')
     )
@@ -1188,23 +1264,32 @@ ui <- fluidPage(
       "Metrics",
       value = "metrics",
       
-      # start with calendar
+      # start with calendar across full width
       br(),
-      fluidRow(
-        column(
-          10,
-          div(
-            id = "calendar_container",
-            plotOutput(
-              "usage_intensity_calendar",
-              #hover = hoverOpts(id = "hover_calendar", delay = 0),
-              width = 777,
-              height = 200
+      create_plot_card(
+        bootstrap_width = 12,
+        plot_id = "usage_intensity_calendar",
+        plot_width = 777,
+        plot_height = 210,
+        card_title = "Number of Questions Answered",
+        card_footer = 
+          fluidRow(
+            class = "plot_card_expand_button_container",
+            column(
+              1,
+              offset = 0,
+              actionButton(
+                "usage_intensity_calendar_button",
+                label = NULL,
+                icon = icon("angle-down")
+              )
             )
-          ),
-          offset = 1
-        )
-      )
+          )
+      ),
+      br(),
+      
+      # space at bottom
+      br()
       
     )
   
