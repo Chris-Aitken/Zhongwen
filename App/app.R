@@ -331,6 +331,7 @@ create_plot_card <- function(bootstrap_width,
                              plot_width,           # pixels
                              plot_height,          # pixels
                              card_title,
+                             include_footer = TRUE,
                              card_footer = NULL,
                              ...) {
   
@@ -350,7 +351,30 @@ create_plot_card <- function(bootstrap_width,
           ...
         ),
         tags$hr(class = "plot_card_spacer"),
-        card_footer
+        if (isTRUE(include_footer)) {
+          div(
+            class = "plot_card_footer",
+            hidden(
+              div(
+                id = paste0(plot_id, "_footer_contents"),
+                class = "plot_card_footer_contents",
+                card_footer
+              )
+            ),
+            fluidRow(
+              class = "plot_card_expand_button_container",
+              column(
+                1,
+                offset = 0,
+                actionButton(
+                  paste0(plot_id, "_button"),
+                  label = NULL,
+                  icon = icon("arrows-alt-v")
+                )
+              )
+            )
+          )
+        }
       ),
       align = "center"
     )
@@ -751,7 +775,7 @@ ui <- fluidPage(
            height: 0px;
          }
          
-         div.plot_card_container button {
+         div.plot_card_expand_button_container button {
            border-radius: 50%;
            height: 40px;
            width: 40px;
@@ -776,6 +800,10 @@ ui <- fluidPage(
            margin-top: 0pt;
            margin-bottom: 10px;
            visibility: hidden;
+         }
+         
+         .plot_card_footer_contents {
+           width: 80%;
          }
       ')
     )
@@ -1272,18 +1300,17 @@ ui <- fluidPage(
         plot_width = 777,
         plot_height = 210,
         card_title = "Number of Questions Answered",
+        include_footer = TRUE,
         card_footer = 
-          fluidRow(
-            class = "plot_card_expand_button_container",
-            column(
-              1,
-              offset = 0,
-              actionButton(
-                "usage_intensity_calendar_button",
-                label = NULL,
-                icon = icon("angle-down")
+          div(
+            p(
+              paste0(
+                "This plot shows the number of questions you answered per day ",
+                "over the last 6 months. The more you answer in a given day, ",
+                "the darker will be the corresponding tile."
               )
-            )
+            ),
+            tags$hr(class = "plot_card_spacer")
           )
       ),
       br(),
@@ -1330,6 +1357,18 @@ server <- function(input, output, session) {
       )
       
     }
+  }
+  
+  # function for opening/closing plot_card footer
+  toggle_card_footer <- function(plot_id) {
+    footer_id <- paste0(plot_id, "_footer_contents")
+    button_id <- paste0(plot_id, "_button")
+    shinyjs::toggleElement(
+      id = footer_id,
+      anim = TRUE,
+      animType = "slide",
+      condition = input[[button_id]] %% 2 != 0
+    )
   }
   
   # initialise reactive list to keep track of background variables that change
@@ -1847,13 +1886,25 @@ server <- function(input, output, session) {
     
                          })
   
-  # render plot showing num questions answered by calendar date
+  # create plot showing num questions answered by calendar date
+  usage_intensity_calendar_plot <- reactive({
+                                     plot_usage_calendar(
+                                       tracked_obs$question_response_history,
+                                       months = 6
+                                     )
+                                   })
+  
+  # render this plot
   output$usage_intensity_calendar <- renderPlot({
-                                       plot_usage_calendar(
-                                         tracked_obs$question_response_history,
-                                         months = 6
-                                       )
+                                       print(usage_intensity_calendar_plot())
                                      })
+  
+  # show or hide calendar plot footer
+  observeEvent(
+    input$usage_intensity_calendar_button, {
+      toggle_card_footer(plot_id = "usage_intensity_calendar")
+    }
+  )
 
 }
 
