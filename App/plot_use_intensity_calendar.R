@@ -18,7 +18,7 @@ quibble <- function(x, q = c(0.25, 0.5, 0.75)) {
 #                              vroom(delim = "\t")
 
 # function for creating calendar usage intensity graph (questions answered per day)
-plot_usage_calendar <- function(df, months_to_plot = 6) {
+calc_questions_per_day <- function(df, months_to_plot = 6) {
 
   # convert datetime to date-only format (remove time)
   df_response_history <- df %>%
@@ -94,8 +94,16 @@ plot_usage_calendar <- function(df, months_to_plot = 6) {
                          ) %>% as_factor()
                        )
   
+  # send this out
+  questions_per_day
+  
+}
+
+# function for drawing plot itself
+plot_usage_calendar <- function(df) {
+  
   # plot usage over time
-  usage_plot <- questions_per_day %>%
+  usage_plot <- df %>%
                 ggplot(aes(x = week, y = weekday, fill = colour_group)) + 
                 geom_tile(width = 0.85, height = 0.85) +
                 scale_y_discrete(
@@ -113,7 +121,9 @@ plot_usage_calendar <- function(df, months_to_plot = 6) {
                 ) +
                 guides(
                   fill = guide_legend(
-                    title = NULL,
+                    title = "Less",
+                    title.position = "left",
+                    title.hjust = -10,
                     label.position = "right"
                   )
                 ) +
@@ -138,9 +148,10 @@ plot_usage_calendar <- function(df, months_to_plot = 6) {
                   legend.text = element_text(size = 13)
                 )
   
-  # prevent clipping to enable annotation outside of plot - width = 8.1 in & height = 2.35 in
-  ggdraw(usage_plot) + 
-    draw_label("Fewer", 0.8, 0.1525, size = 13)
+  # add label to left side of legend - plot width = 8.1 in & height = 2.35 in
+  # ggdraw(usage_plot) + 
+  #   draw_label("Fewer", 0.8, 0.1525, size = 13)
+  usage_plot
 
 }
 

@@ -765,6 +765,7 @@ ui <- fluidPage(
            width: 630pt;
            height: auto;
            border-radius: 10pt;
+           position: relative;
          }
          
          div.plot_card_container h5 {
@@ -1300,19 +1301,21 @@ ui <- fluidPage(
         plot_width = 777,
         plot_height = 210,
         card_title = "Number of Questions Answered",
+        hover = hoverOpts("usage_intensity_calendar_hover", delay = 100, delayType = "debounce"),
         include_footer = TRUE,
         card_footer = 
           div(
             p(
               paste0(
                 "This plot shows the number of questions you answered per day ",
-                "over the last 6 months. The more you answer in a given day, ",
+                "over the last 6 months. The more you answered in a given day, ",
                 "the darker will be the corresponding tile."
               )
             ),
             tags$hr(class = "plot_card_spacer")
           )
       ),
+      uiOutput("usage_intensity_calendar_tooltip"),
       br(),
       
       # space at bottom
@@ -1887,16 +1890,18 @@ server <- function(input, output, session) {
                          })
   
   # create plot showing num questions answered by calendar date
-  usage_intensity_calendar_plot <- reactive({
-                                     plot_usage_calendar(
-                                       tracked_obs$question_response_history,
-                                       months = 6
-                                     )
-                                   })
+  get_usage_intensity_calendar_data <- reactive({
+                                         calc_questions_per_day(
+                                           tracked_obs$question_response_history,
+                                           months = 6
+                                         )
+                                       })
   
   # render this plot
   output$usage_intensity_calendar <- renderPlot({
-                                       print(usage_intensity_calendar_plot())
+                                       plot_usage_calendar(
+                                         get_usage_intensity_calendar_data()
+                                       )
                                      })
   
   # show or hide calendar plot footer
@@ -1905,6 +1910,61 @@ server <- function(input, output, session) {
       toggle_card_footer(plot_id = "usage_intensity_calendar")
     }
   )
+  
+  #add tooltip to calendar
+  output$usage_intensity_calendar_tooltip <- renderUI({
+    
+    # track mousehover
+    hover <- input$usage_intensity_calendar_hover
+    
+    # get row of data that corresponds to tile hovered on
+    point <- nearPoints(
+               df = get_usage_intensity_calendar_data(),
+               hover,
+               threshold = 5,
+               maxpoints = 1,
+               addDist = TRUE
+             )
+    
+    # don't print anything if mouse isn't over specific tile
+    if (nrow(point) == 0) return(NULL)
+    
+    # get (x, y) coordinates in pexels of mouse when hovering
+    left_px <- hover$coords_css$x
+    top_px <- hover$coords_css$y
+    
+    # set up css for tooltip (natural to define inline because left + top change)
+    cal_tooltip_style <- glue('
+                           position: absolute;
+                           z-index: 100;
+                           background-color: #919191;
+                           color: #fff;
+                           font-size: 9pt;
+                           height: 45px;
+                           width: 95px;
+                           padding: 5px;
+                           left: {left_px + 180}px;
+                           top: {top_px + 120}px;
+                         ')
+    
+    # create tooltip with dynamic contents
+    wellPanel(
+      style = cal_tooltip_style,
+      p(
+        HTML(
+          glue('
+            <span>
+              <b>{format(point$date, "%d %b, %Y")}</b>
+              <br>
+              {point$questions_answered} answered
+              <br>
+            </span>
+          ')
+        )
+      )
+    )
+    
+  })
 
 }
 
