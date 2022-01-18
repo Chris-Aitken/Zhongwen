@@ -1,30 +1,25 @@
 
+
+# load required packages
 library(dplyr)
 library(lubridate)
 library(forcats)
 library(ggplot2)
-library(cowplot)
 
-# function for getting quantile summary
+# function for storing quantile summary
 quibble <- function(x, q = c(0.25, 0.5, 0.75)) {
   tibble("cuts" = quantile(x, q), "quantile" = q)
 }
 
-# # declare path to app files locally
-# path_to_project <- "~/Documents/Personal/Chinese/Zhongwen"
-# 
-# # load question history
-# question_response_history <- glue("{path_to_project}/../contemporary_chinese_record.tsv") %>%
-#                              vroom(delim = "\t")
-
 # function for creating calendar usage intensity graph (questions answered per day)
+# df expected is the question_response_history from the app
 calc_questions_per_day <- function(df, months_to_plot = 6) {
 
   # convert datetime to date-only format (remove time)
   df_response_history <- df %>%
                          mutate(date = date(date_time))
   
-  # get dates spanning latest date and n-months prior
+  # get dates spanning latest date's full month and n-months prior
   plot_date_span <- tibble(
                       date = seq(
                         floor_date(
@@ -102,7 +97,7 @@ calc_questions_per_day <- function(df, months_to_plot = 6) {
 # function for drawing plot itself
 plot_usage_calendar <- function(df) {
   
-  # plot usage over time
+  # plot usage over time using colour of tiles to represent the number answered
   usage_plot <- df %>%
                 ggplot(aes(x = week, y = weekday, fill = colour_group)) + 
                 geom_tile(width = 0.85, height = 0.85) +
@@ -121,17 +116,18 @@ plot_usage_calendar <- function(df) {
                 ) +
                 guides(
                   fill = guide_legend(
-                    title = "Less",
-                    title.position = "left",
-                    title.hjust = -10,
-                    label.position = "right"
+                    title = "Less",           # hacky - use title on left of margin
+                    title.position = "top",   # annotates the legend instead of title
+                    title.vjust = -6.5,       # title.position = "left" doesn't work
+                    title.hjust = -0.4,       # hjust & vjust control positioning, but
+                    label.position = "right"  # only when position set to "top"
                   )
                 ) +
                 facet_grid(
                   cols = vars(label),
-                  scales = "free_x",
-                  space = "free"
-                ) +
+                  scales = "free_x",          # allows for months with differing nums of weeks
+                  space = "free"              # allows aspect ratio to adjust - height & width (h&w) need to be set
+                ) +                           # can't use aspect.ratio in junction with this, so h&w set 'squaredness'
                 theme(
                   panel.background = element_blank(),
                   plot.margin = margin(4, 15, 25, 4, "pt"),
@@ -144,13 +140,12 @@ plot_usage_calendar <- function(df) {
                   legend.justification = c(0.9925,0),
                   legend.key.size = unit(14, "pt"),
                   legend.spacing.x = unit(1, "pt"),
-                  legend.margin = margin(-5, 0, 0, 0),
-                  legend.text = element_text(size = 13)
+                  legend.margin = margin(-25, 0, 0, 0),
+                  legend.text = element_text(size = 13),
+                  legend.title = element_text(size = 13)
                 )
   
-  # add label to left side of legend - plot width = 8.1 in & height = 2.35 in
-  # ggdraw(usage_plot) + 
-  #   draw_label("Fewer", 0.8, 0.1525, size = 13)
+  # return plot
   usage_plot
 
 }
