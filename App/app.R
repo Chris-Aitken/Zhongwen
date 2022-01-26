@@ -384,6 +384,7 @@ create_plot_card <- function(bootstrap_width,
 
 # load plotting functions
 source(glue("{path_to_project}/App/plot_use_intensity_calendar.R"))
+source(glue("{path_to_project}/App/plot_question_type_distribution.R"))
 
 # set theme for loading spinners
 waiter_set_theme(html = spin_5(), color = transparent(0.4))
@@ -1318,6 +1319,27 @@ ui <- fluidPage(
       uiOutput("usage_intensity_calendar_tooltip"),
       br(),
       
+      # then the question distribution radar plot
+      br(),
+      create_plot_card(
+        bootstrap_width = 12,
+        plot_id = "question_dist_radar",
+        plot_width = 777,
+        plot_height = 350,
+        card_title = "Proportion of Questions Answered by Prompt and Response Language",
+        include_footer = TRUE,
+        card_footer = 
+          div(
+            p(
+              paste0(
+                "This is a description."
+              )
+            ),
+            tags$hr(class = "plot_card_spacer")
+          )
+      ),
+      br(),
+      
       # space at bottom
       br()
       
@@ -1881,7 +1903,7 @@ server <- function(input, output, session) {
   # render cards showing key phrases
   output$phrase_cards <- renderUI({
                            
-                           # make cards
+                           # make cards - content from get_phrases() & pmap iterates over it
                            html_cards <- pmap(get_phrases(), create_card)
                            
                            # now lay out cards left to right + top to bottom
@@ -1890,17 +1912,17 @@ server <- function(input, output, session) {
                          })
   
   # create plot showing num questions answered by calendar date
-  get_usage_intensity_calendar_data <- reactive({
-                                         calc_questions_per_day(
-                                           tracked_obs$question_response_history,
-                                           months = 6
-                                         )
-                                       })
+  get_usage_calendar_data <- reactive({
+                               calc_questions_per_day(
+                                 tracked_obs$question_response_history,
+                                 months = 6
+                               )
+                             })
   
   # render this plot
   output$usage_intensity_calendar <- renderPlot({
                                        plot_usage_calendar(
-                                         get_usage_intensity_calendar_data()
+                                         get_usage_calendar_data()
                                        )
                                      })
   
@@ -1914,12 +1936,12 @@ server <- function(input, output, session) {
   #add tooltip to calendar
   output$usage_intensity_calendar_tooltip <- renderUI({
     
-    # track mousehover
+    # track mousehover location
     hover <- input$usage_intensity_calendar_hover
     
     # get row of data that corresponds to tile hovered on
     point <- nearPoints(
-               df = get_usage_intensity_calendar_data(),
+               df = get_usage_calendar_data(),
                hover,
                threshold = 5,
                maxpoints = 1,
@@ -1929,9 +1951,9 @@ server <- function(input, output, session) {
     # don't print anything if mouse isn't over specific tile
     if (nrow(point) == 0) return(NULL)
     
-    # get (x, y) coordinates in pexels of mouse when hovering
-    left_px <- hover$coords_css$x
-    top_px <- hover$coords_css$y
+    # get (x, y) coordinates in pixels of mouse when hovering
+    left_px <- hover$coords_css$x    # distance from the left
+    top_px <- hover$coords_css$y     # distance from the top
     
     # set up css for tooltip (natural to define inline because left + top change)
     cal_tooltip_style <- glue('
@@ -1940,10 +1962,10 @@ server <- function(input, output, session) {
                            background-color: #919191;
                            color: #fff;
                            font-size: 9pt;
-                           height: 45px;
-                           width: 95px;
+                           height: 70px;
+                           width: 105px;
                            padding: 5px;
-                           left: {left_px + 180}px;
+                           left: {left_px + 160}px;
                            top: {top_px + 120}px;
                          ')
     
@@ -1958,6 +1980,7 @@ server <- function(input, output, session) {
               <br>
               {point$questions_answered} answered
               <br>
+               left: {round(left_px, 0)} top: {round(top_px, 0)}
             </span>
           ')
         )
@@ -1965,6 +1988,27 @@ server <- function(input, output, session) {
     )
     
   })
+  
+  # reshape data for language radar plot
+  get_lang_radar_data <- reactive({
+                           tracked_obs$question_response_history %>%
+                             calc_question_type_dist() %>%
+                             pluck("types_aggregated")
+                         })
+  
+  # render the plot with this data
+  output$question_dist_radar <- renderPlot({
+                                  plot_question_type_dist(
+                                    get_lang_radar_data()
+                                  )
+                                })
+  
+  # show or hide calendar plot footer
+  observeEvent(
+    input$question_dist_radar_button, {
+      toggle_card_footer(plot_id = "question_dist_radar")
+    }
+  )
 
 }
 
