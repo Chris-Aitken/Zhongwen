@@ -54,7 +54,7 @@ plot_question_type_dist <- function(df) {
   # get data into shape for plotting package
   plot_df <- df %>%
              mutate(
-               type = case_when(
+               group = case_when(
                  type == "prompt" ~ "Prompt Language",
                  type == "response" ~ "Response Language"
                )
@@ -68,7 +68,6 @@ plot_question_type_dist <- function(df) {
   
   # plot as radar plot
   plot_df %>%
-    rename(group = type) %>%
     ggradar(
       centre.y = 0,
       plot.legend = FALSE,
