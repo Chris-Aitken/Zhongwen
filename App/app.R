@@ -1806,7 +1806,7 @@ server <- function(input, output, session) {
                               input$page_nav_menu == "vocab_table"
                               tracked_obs$vocab_tbl_selector_closed
                             }, {
-                              Waiter$new(id = "vocab_table", fadeout = 2000)$show()
+                              Waiter$new(id = "vocab_table", fadeout = 100)$show()
                               vocab %>%
                                filter(
                                  lesson %in% process_lesson_selection(

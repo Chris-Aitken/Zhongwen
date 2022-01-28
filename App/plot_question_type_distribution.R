@@ -1,6 +1,8 @@
 
 # load required packages
 library(dplyr)
+library(tidyr)
+library(purrr)
 library(forcats)
 library(ggplot2)
 library(ggradar)
@@ -54,7 +56,7 @@ plot_question_type_dist <- function(df) {
   # get data into shape for plotting package
   plot_df <- df %>%
              mutate(
-               group = case_when(
+               type = case_when(
                  type == "prompt" ~ "Prompt Language",
                  type == "response" ~ "Response Language"
                )
@@ -68,6 +70,7 @@ plot_question_type_dist <- function(df) {
   
   # plot as radar plot
   plot_df %>%
+    rename(group = type) %>%
     ggradar(
       centre.y = 0,
       plot.legend = FALSE,
